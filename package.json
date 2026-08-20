@@ -1,0 +1,20 @@
+{
+  "name": "volt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VOLT — AI-Powered Predictive EV Journey Optimization Platform",
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspace=services/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run db:migrate --workspace=services/api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
