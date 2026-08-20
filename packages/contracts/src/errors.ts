@@ -1,0 +1,35 @@
+// ──────────────────────────────────────────────
+// Standardized Application Error Codes
+// Used across the entire VOLT backend.
+// ──────────────────────────────────────────────
+
+export const ErrorCode = {
+  // Authentication
+  AUTH_REQUIRED: 'AUTH_REQUIRED',
+  AUTH_INVALID: 'AUTH_INVALID',
+  AUTH_EXPIRED: 'AUTH_EXPIRED',
+  FORBIDDEN: 'FORBIDDEN',
+
+  // Resources
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  VEHICLE_NOT_FOUND: 'VEHICLE_NOT_FOUND',
+  STATION_NOT_FOUND: 'STATION_NOT_FOUND',
+  TRIP_NOT_FOUND: 'TRIP_NOT_FOUND',
+
+  // Service availability
+  BATTERY_SERVICE_UNAVAILABLE: 'BATTERY_SERVICE_UNAVAILABLE',
+  ROUTING_SERVICE_UNAVAILABLE: 'ROUTING_SERVICE_UNAVAILABLE',
+  PREDICTION_SERVICE_UNAVAILABLE: 'PREDICTION_SERVICE_UNAVAILABLE',
+  OPTIMIZER_SERVICE_UNAVAILABLE: 'OPTIMIZER_SERVICE_UNAVAILABLE',
+
+  // Business logic
+  ROUTE_UNAVAILABLE: 'ROUTE_UNAVAILABLE',
+  INSUFFICIENT_BATTERY: 'INSUFFICIENT_BATTERY',
+
+  // Generic
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  RATE_LIMITED: 'RATE_LIMITED',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

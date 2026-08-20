@@ -1,0 +1,33 @@
+{
+  "name": "@volt/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "VOLT API Gateway — Node.js + Hono",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "clean": "rimraf dist",
+    "db:migrate": "tsx src/db/migrate.ts"
+  },
+  "dependencies": {
+    "@volt/contracts": "*",
+    "hono": "^4.4.0",
+    "@hono/node-server": "^1.12.0",
+    "firebase-admin": "^12.0.0",
+    "pg": "^8.12.0",
+    "ioredis": "^5.4.0",
+    "zod": "^3.23.0",
+    "nanoid": "^5.0.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.16.0",
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.0",
+    "rimraf": "^5.0.0"
+  }
+}
