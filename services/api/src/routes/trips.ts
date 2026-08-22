@@ -12,6 +12,9 @@ import { AppError } from '../utils/AppError.js';
 import { getRoute } from '../integrations/routingClient.js';
 import { checkReachability } from '../integrations/batteryClient.js';
 import type { LocalUserContext } from '../integrations/firebase/userSync.js';
+import { findChargersAlongRoute, MOCK_STATION_ID_1, MOCK_STATION_ID_2 } from '../integrations/chargerClient.js';
+import { getStationPredictions } from '../integrations/predictionClient.js';
+import { optimizeTrip, OptimizerResult, TripStop } from '../integrations/optimizerClient.js';
 
 type Variables = {
   requestId: string;
@@ -61,13 +64,50 @@ tripsRouter.post(
       route.distanceKm
     );
 
-    // Phase 2 Happy Path: Ensure the destination is reachable without charging
+    let finalStops: TripStop[] = [];
+    let optimizerResult: OptimizerResult | null = null;
+
+    // Phase 3 Multi-Stop Logic
     if (!batteryResult.reachable) {
-      throw new AppError(
-        422,
-        'INSUFFICIENT_BATTERY' as any,
-        'Destination is not reachable without charging. (Multi-stop logic coming in Phase 3!)'
-      );
+      try {
+        const candidateChargers = await findChargersAlongRoute(route.geometry);
+        const stationIds = candidateChargers.map(c => c.id);
+        const predictions = await getStationPredictions(stationIds);
+        
+        optimizerResult = await optimizeTrip(
+          route,
+          body.vehicle_id,
+          body.current_soc,
+          candidateChargers,
+          predictions
+        );
+
+        if (optimizerResult.status === 'UNREACHABLE') {
+          throw new AppError(422, 'INSUFFICIENT_BATTERY' as any, 'Destination is not reachable even with charging stops.');
+        }
+
+        finalStops = optimizerResult.stops;
+
+        // Ensure mock stations exist in DB to prevent foreign key errors for trip_stops
+        for (const charger of candidateChargers) {
+          await query(
+            `INSERT INTO charging_stations (id, name, latitude, longitude, operator_name, max_power_kw)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (id) DO NOTHING`,
+            [
+              charger.id,
+              `Mock Station ${charger.id.split('-')[0]}`,
+              charger.latitude,
+              charger.longitude,
+              charger.operator,
+              charger.maxPowerKw
+            ]
+          );
+        }
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        throw new AppError(500, 'INTERNAL_ERROR' as any, 'Failed to compute charging stops.');
+      }
     }
 
     // 4. Persist the trip to PostGIS database
@@ -91,7 +131,26 @@ tripsRouter.post(
 
     const tripId = insertResult.rows[0].id;
 
-    // 5. Construct the final TripPlan payload
+    // 5. Persist trip_stops
+    for (const stop of finalStops) {
+      await query(
+        `INSERT INTO trip_stops (
+           trip_id, station_id, sequence, arrival_soc, departure_soc,
+           expected_wait_minutes, charging_minutes, status
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'planned')`,
+        [
+          tripId,
+          stop.stationId,
+          stop.sequence,
+          stop.arrivalSoc,
+          stop.departureSoc,
+          stop.expectedWaitMinutes,
+          stop.chargingMinutes,
+        ]
+      );
+    }
+
+    // 6. Construct the final TripPlan payload
     return c.json({
       success: true,
       data: {
@@ -100,6 +159,12 @@ tripsRouter.post(
         durationMinutes: route.durationMinutes,
         battery: batteryResult,
         geometry: route.geometry,
+        stops: finalStops,
+        optimizerData: optimizerResult ? {
+          totalWaitMinutes: optimizerResult.totalWaitMinutes,
+          totalChargingMinutes: optimizerResult.totalChargingMinutes,
+          finalSoc: optimizerResult.finalSoc
+        } : null,
       },
       error: null,
       meta: {
