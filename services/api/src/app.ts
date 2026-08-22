@@ -12,6 +12,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import healthRoute from './routes/health.js';
 import usersRouter from './routes/users.js';
 import vehiclesRouter from './routes/vehicles.js';
+import tripsRouter from './routes/trips.js';
 
 // Create the Hono app with typed variables
 type Variables = {
@@ -31,5 +32,6 @@ app.onError(errorHandler);
 app.route('/health', healthRoute);
 app.route('/users', usersRouter);
 app.route('/vehicles', vehiclesRouter);
+app.route('/trips', tripsRouter);
 
 export default app;
