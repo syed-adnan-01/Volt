@@ -31,6 +31,17 @@ Docs/VOLT_In_Depth_Implementation_Plan.md
 Docs/VOLT_Member1_Backend_Implementation_Plan.md
 Docs/VOLT_Updated_System_Architecture_Knowledge_Base.md
 Docs/VOLT_Member_1_Updated_Firebase_Implementation_Plan.md
+Docs/VOLT_Member2_Frontend_Implementation_Plan.md
 
 # Firebase Secrets
 firebase/*.json
+
+# Expo / React Native
+.expo/
+ios/
+android/
+web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
