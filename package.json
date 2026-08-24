@@ -5,7 +5,8 @@
   "description": "VOLT — AI-Powered Predictive EV Journey Optimization Platform",
   "workspaces": [
     "packages/*",
-    "services/*"
+    "services/*",
+    "apps/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
