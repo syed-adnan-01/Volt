@@ -13,6 +13,7 @@
     "dev": "npm run dev --workspace=services/api",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:dev": "npm run test:dev --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace=services/api"
   },
   "engines": {
