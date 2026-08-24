@@ -175,4 +175,75 @@ tripsRouter.post(
   }
 );
 
+tripsRouter.get('/:id', async (c) => {
+  const id = c.req.param('id');
+  const user = c.get('user');
+
+  const tripQuery = await query(`SELECT * FROM trips WHERE id = $1 AND user_id = $2`, [id, user.id]);
+  if (tripQuery.rows.length === 0) {
+    throw new AppError(404, 'NOT_FOUND' as any, 'Trip not found');
+  }
+
+  const stopsQuery = await query(`SELECT * FROM trip_stops WHERE trip_id = $1 ORDER BY sequence ASC`, [id]);
+
+  return c.json({
+    success: true,
+    data: { ...tripQuery.rows[0], stops: stopsQuery.rows },
+    error: null,
+    meta: { requestId: c.get('requestId') }
+  });
+});
+
+tripsRouter.get('/:id/plan', async (c) => {
+  const id = c.req.param('id');
+  // Mock full plan response
+  return c.json({
+    success: true,
+    data: { tripId: id, planReady: true, note: 'Plan endpoint (mock) for Phase 4' },
+    error: null,
+    meta: { requestId: c.get('requestId') }
+  });
+});
+
+tripsRouter.post('/:id/reroute', async (c) => {
+  const id = c.req.param('id');
+  const user = c.get('user');
+  
+  // Verify trip belongs to user
+  const tripCheck = await query(`SELECT id FROM trips WHERE id = $1 AND user_id = $2`, [id, user.id]);
+  if (tripCheck.rows.length === 0) {
+    throw new AppError(404, 'NOT_FOUND' as any, 'Trip not found');
+  }
+
+  // Phase 4 Reroute logic - for now, we return a mock rerouted response
+  return c.json({
+    success: true,
+    data: { message: 'Trip successfully rerouted (mocked for Phase 4)' },
+    error: null,
+    meta: { requestId: c.get('requestId'), timestamp: new Date().toISOString() }
+  }, 200);
+});
+
+tripsRouter.patch('/:id/status', zValidator('json', z.object({ status: z.string() })), async (c) => {
+  const id = c.req.param('id');
+  const user = c.get('user');
+  const { status } = c.req.valid('json');
+
+  const result = await query(
+    `UPDATE trips SET status = $1 WHERE id = $2 AND user_id = $3 RETURNING *`,
+    [status, id, user.id]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AppError(404, 'NOT_FOUND' as any, 'Trip not found');
+  }
+
+  return c.json({
+    success: true,
+    data: result.rows[0],
+    error: null,
+    meta: { requestId: c.get('requestId') }
+  });
+});
+
 export default tripsRouter;
