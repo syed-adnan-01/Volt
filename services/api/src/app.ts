@@ -13,6 +13,9 @@ import healthRoute from './routes/health.js';
 import usersRouter from './routes/users.js';
 import vehiclesRouter from './routes/vehicles.js';
 import tripsRouter from './routes/trips.js';
+import stationsRouter from './routes/stations.js';
+import feedbackRouter from './routes/feedback.js';
+import { rateLimit } from './middleware/rateLimit.js';
 
 // Create the Hono app with typed variables
 type Variables = {
@@ -25,6 +28,9 @@ const app = new Hono<{ Variables: Variables }>();
 app.use('*', cors());
 app.use('*', requestLogger);
 
+// Apply rate limiting to all API routes
+app.use('*', rateLimit({ windowMs: 60 * 1000, max: 100 }));
+
 // ── Global Error Handler ────────────────────
 app.onError(errorHandler);
 
@@ -33,5 +39,7 @@ app.route('/health', healthRoute);
 app.route('/users', usersRouter);
 app.route('/vehicles', vehiclesRouter);
 app.route('/trips', tripsRouter);
+app.route('/stations', stationsRouter);
+app.route('/stations', feedbackRouter); // mounted at /stations so /stations/:id/feedback works
 
 export default app;

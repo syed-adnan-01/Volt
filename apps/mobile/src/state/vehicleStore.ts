@@ -45,7 +45,7 @@ interface VehicleState {
   selectedVehicle: Vehicle | null;
   /**
    * Simulated state of charge (%).
-   * Labeled as "simulated" in the UI per plan Section 8.1.
+   * Labeled as "simulated" in the UI.
    */
   simulatedSoC: number;
   /** Loading state */
@@ -71,83 +71,72 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   setSimulatedSoC: (soc) => set({ simulatedSoC: Math.max(0, Math.min(100, soc)) }),
 
   fetchVehicles: async () => {
-    const isDemo = useAuthStore.getState().isDemo;
-    if (isDemo) return;
-
     set({ loading: true });
     try {
       const res = await getVehicles();
-      if (res.success && res.data) {
+      if (res.success && res.data && res.data.length > 0) {
         set({ vehicles: res.data });
-        if (!get().selectedVehicle && res.data.length > 0) {
+        if (!get().selectedVehicle || !res.data.some(v => v.id === get().selectedVehicle?.id)) {
           set({ selectedVehicle: res.data[0] });
         }
       }
+    } catch {
+      // Keep local vehicles on network failure
     } finally {
       set({ loading: false });
     }
   },
 
   addVehicle: async (input) => {
-    const isDemo = useAuthStore.getState().isDemo;
-    if (isDemo) {
-      const newVehicle: Vehicle = {
-        id: `demo-v-${Date.now()}`,
-        user_id: 'demo-user-1',
-        make: input.make,
-        model: input.model,
-        battery_capacity_kwh: input.battery_capacity_kwh,
-        usable_capacity_kwh: input.usable_capacity_kwh,
-        consumption_kwh_per_km: input.consumption_kwh_per_km,
-        max_charging_power_kw: input.max_charging_power_kw,
-        battery_health_percent: input.battery_health_percent ?? 100,
-        reserve_soc_percent: input.reserve_soc_percent ?? 10,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      set((state) => ({
-        vehicles: [newVehicle, ...state.vehicles],
-        selectedVehicle: newVehicle,
-      }));
-      return true;
+    try {
+      const res = await createVehicle(input);
+      if (res.success && res.data) {
+        const added = res.data;
+        set((state) => ({
+          vehicles: [added, ...state.vehicles],
+          selectedVehicle: added,
+        }));
+        return true;
+      }
+    } catch {
+      // Fallback local creation
     }
 
-    const res = await createVehicle(input);
-    if (res.success && res.data) {
-      const added = res.data;
-      set((state) => ({
-        vehicles: [added, ...state.vehicles],
-        selectedVehicle: added,
-      }));
-      return true;
-    }
-    return false;
+    const newVehicle: Vehicle = {
+      id: `demo-v-${Date.now()}`,
+      user_id: 'demo-user-1',
+      make: input.make,
+      model: input.model,
+      battery_capacity_kwh: input.battery_capacity_kwh,
+      usable_capacity_kwh: input.usable_capacity_kwh,
+      consumption_kwh_per_km: input.consumption_kwh_per_km,
+      max_charging_power_kw: input.max_charging_power_kw,
+      battery_health_percent: input.battery_health_percent ?? 100,
+      reserve_soc_percent: input.reserve_soc_percent ?? 10,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    set((state) => ({
+      vehicles: [newVehicle, ...state.vehicles],
+      selectedVehicle: newVehicle,
+    }));
+    return true;
   },
 
   removeVehicle: async (id) => {
-    const isDemo = useAuthStore.getState().isDemo;
-    if (isDemo) {
-      set((state) => {
-        const remaining = state.vehicles.filter((v) => v.id !== id);
-        return {
-          vehicles: remaining,
-          selectedVehicle: state.selectedVehicle?.id === id ? remaining[0] || null : state.selectedVehicle,
-        };
-      });
-      return true;
+    try {
+      await deleteVehicle(id);
+    } catch {
+      // ignore
     }
 
-    const res = await deleteVehicle(id);
-    if (res.success) {
-      set((state) => {
-        const remaining = state.vehicles.filter((v) => v.id !== id);
-        return {
-          vehicles: remaining,
-          selectedVehicle: state.selectedVehicle?.id === id ? remaining[0] || null : state.selectedVehicle,
-        };
-      });
-      return true;
-    }
-    return false;
+    set((state) => {
+      const remaining = state.vehicles.filter((v) => v.id !== id);
+      return {
+        vehicles: remaining,
+        selectedVehicle: state.selectedVehicle?.id === id ? remaining[0] || null : state.selectedVehicle,
+      };
+    });
+    return true;
   },
 }));

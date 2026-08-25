@@ -49,8 +49,19 @@ export interface PlanTripInput {
   dest_lng: number;
 }
 
-// ── API calls ────────────────────────────────
-
 export function planTrip(input: PlanTripInput): Promise<ApiResponse<TripPlan>> {
   return api.post<TripPlan>('/trips', input);
 }
+
+export function getTrip(id: string): Promise<ApiResponse<TripPlan & { id: string; status: string }>> {
+  return api.get<TripPlan & { id: string; status: string }>(`/trips/${id}`);
+}
+
+export function rerouteTrip(id: string): Promise<ApiResponse<{ message: string; newPlan?: TripPlan }>> {
+  return api.post<{ message: string; newPlan?: TripPlan }>(`/trips/${id}/reroute`, {});
+}
+
+export function updateTripStatus(id: string, status: string): Promise<ApiResponse<{ id: string; status: string }>> {
+  return api.patch<{ id: string; status: string }>(`/trips/${id}/status`, { status });
+}
+

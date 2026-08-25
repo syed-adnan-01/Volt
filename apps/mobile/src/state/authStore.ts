@@ -5,7 +5,7 @@
 // ──────────────────────────────────────────────
 
 import { create } from 'zustand';
-import { getCurrentUser, type UserProfile } from '@/api/auth';
+import { getCurrentUser, updateProfile, type UserProfile, type UpdateProfileInput } from '@/api/auth';
 
 interface AuthState {
   /** Auth token for API requests */
@@ -23,13 +23,22 @@ interface AuthState {
   setInitialized: (initialized: boolean) => void;
   demoLogin: () => void;
   fetchProfile: () => Promise<void>;
+  updateUserProfile: (input: UpdateProfileInput) => Promise<boolean>;
   logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null,
-  user: null,
-  isDemo: false,
+  token: 'demo-token-12345', // pre-authenticated with demo token for ease of use
+  user: {
+    id: 'demo-user-1',
+    email: 'driver@volt.app',
+    name: 'Adnan Syed (Demo Driver)',
+    phone: '+1 555-0199',
+    role: 'driver',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  isDemo: true,
   initialized: true,
 
   setToken: (token) => set({ token, isDemo: false }),
@@ -42,7 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isDemo: true,
       user: {
         id: 'demo-user-1',
-        email: 'demo@volt.app',
+        email: 'driver@volt.app',
         name: 'Adnan Syed (Demo Driver)',
         phone: '+1 555-0199',
         role: 'driver',
@@ -50,14 +59,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         updated_at: new Date().toISOString(),
       },
     });
+    get().fetchProfile();
   },
 
   fetchProfile: async () => {
-    if (get().isDemo || !get().token) return;
-    const res = await getCurrentUser();
+    if (!get().token) return;
+    try {
+      const res = await getCurrentUser();
+      if (res.success && res.data) {
+        set({ user: res.data });
+      }
+    } catch {
+      // Keep existing local user on network failure
+    }
+  },
+
+  updateUserProfile: async (input) => {
+    const res = await updateProfile(input);
     if (res.success && res.data) {
       set({ user: res.data });
+      return true;
     }
+    return false;
   },
 
   logout: () => set({ token: null, user: null, isDemo: false }),

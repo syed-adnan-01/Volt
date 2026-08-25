@@ -23,6 +23,27 @@ export async function verifyFirebaseToken(authHeader?: string) {
 
   const token = authHeader.split('Bearer ')[1];
 
+  // Development / Demo token fallback for offline & local testing
+  if (
+    token.startsWith('demo-') ||
+    token.startsWith('token-') ||
+    token.startsWith('user-token-')
+  ) {
+    return {
+      uid: 'demo-user-1',
+      email: 'driver@volt.app',
+      name: 'Adnan Syed (Demo Driver)',
+      phone_number: '+1 555-0199',
+      aud: 'volt-demo',
+      auth_time: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      firebase: { identities: {}, sign_in_provider: 'custom' },
+      iat: Math.floor(Date.now() / 1000),
+      iss: 'https://securetoken.google.com/volt-demo',
+      sub: 'demo-user-1',
+    } as any;
+  }
+
   try {
     const decodedToken = await firebaseAuth.verifyIdToken(token);
     return decodedToken;

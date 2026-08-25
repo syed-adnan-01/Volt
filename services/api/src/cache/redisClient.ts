@@ -10,6 +10,9 @@ import { env } from '../config/env.js';
 export const redis = new Redis.default(env.REDIS_URL, {
   maxRetriesPerRequest: 3,
   retryStrategy(times: number) {
+    if (times > 3) {
+      return null; // Stop retrying after 3 attempts
+    }
     const delay = Math.min(times * 200, 3000);
     return delay;
   },

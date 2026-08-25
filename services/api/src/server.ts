@@ -13,7 +13,12 @@ import app from './app.js';
 
 async function main() {
   // Connect Redis (lazy connect mode)
-  await redis.connect();
+  try {
+    await redis.connect();
+    console.log('Redis connected successfully.');
+  } catch (err: any) {
+    console.warn(`⚠️ Redis failed to connect (${err.message}). Starting server in degraded mode without cache.`);
+  }
 
   console.log(`
   ╔═══════════════════════════════════════════╗
