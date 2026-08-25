@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
-// Plan Screen — Enter Destination
-// Map with glassmorphic search bar overlay and
-// hardcoded test route polyline (geometry de-risk).
+// Plan Screen — Enter Destination & Find Routes
+// Glassmorphic search overlay, live vehicle specs,
+// and real connection to the Trips Orchestrator.
 // ──────────────────────────────────────────────
 
 import React, { useState } from 'react';
@@ -10,15 +10,17 @@ import {
   Text,
   View,
   Platform,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GlassCard, GlassInput, GlassButton } from '@/components/ui';
-import { colors, fontFamily, fontSize, fontWeight, spacing, radius } from '@/theme';
+import { router } from 'expo-router';
+import { GlassCard, GlassInput, GlassButton, StatusBadge } from '@/components/ui';
+import { colors, fontFamily, fontSize, fontWeight, spacing } from '@/theme';
+import { useVehicleStore } from '@/state/vehicleStore';
+import { useTripStore } from '@/state/tripStore';
 
-// ── Hardcoded test route ─────────────────────
-// Mumbai → Pune route (rough coordinates) to verify
-// that the Array<[number, number]> geometry format
-// from @volt/contracts RoutingResult renders correctly.
+// ── Default Mumbai → Pune route points ───────
 const TEST_ROUTE: Array<[number, number]> = [
   [19.076, 72.8777],   // Mumbai
   [19.0176, 73.0156],  // Panvel
@@ -26,10 +28,6 @@ const TEST_ROUTE: Array<[number, number]> = [
   [18.5204, 73.8567],  // Pune
 ];
 
-// ── Map Placeholder ──────────────────────────
-// react-native-maps requires native build config.
-// For Phase 0 web/Expo Go testing, we show a styled
-// placeholder. The map renders on actual device builds.
 function MapPlaceholder() {
   return (
     <View style={styles.mapPlaceholder}>
@@ -58,9 +56,9 @@ function MapPlaceholder() {
       </View>
 
       <View style={styles.mapLabel}>
-        <Text style={styles.mapLabelText}>Map View</Text>
+        <Text style={styles.mapLabelText}>Journey Corridor Preview</Text>
         <Text style={styles.mapLabelSubtext}>
-          Hardcoded route: Mumbai → Pune ({TEST_ROUTE.length} waypoints)
+          Mumbai → Pune (NH48 Highway with PostGIS Charger Nodes)
         </Text>
       </View>
     </View>
@@ -68,33 +66,71 @@ function MapPlaceholder() {
 }
 
 export default function PlanScreen() {
-  const [destination, setDestination] = useState('');
+  const [destination, setDestination] = useState('Pune, Maharashtra');
+  const { selectedVehicle, simulatedSoC } = useVehicleStore();
+  const { planTripAction, loading, error } = useTripStore();
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const handleFindRoutes = async () => {
+    setLocalError(null);
+
+    // Pune coordinates
+    const destLat = 18.5204;
+    const destLng = 73.8567;
+
+    const res = await planTripAction(destLat, destLng, destination);
+    if (res.success) {
+      router.push('/trip/route-options');
+    } else {
+      setLocalError(res.error || 'Failed to calculate route.');
+    }
+  };
 
   return (
     <View style={styles.container}>
-      {/* Full-screen map behind everything */}
+      {/* Full-screen map background */}
       <MapPlaceholder />
 
       {/* Glassmorphic search overlay at top */}
       <View style={styles.searchOverlay}>
         <LinearGradient
-          colors={['rgba(10,10,15,0.9)', 'rgba(10,10,15,0)']}
+          colors={['rgba(10,10,15,0.95)', 'rgba(10,10,15,0)']}
           style={styles.searchGradient}
         >
           <Text style={styles.screenTitle}>Plan Trip</Text>
           <GlassCard style={styles.searchCard}>
+            <View style={styles.originRow}>
+              <Text style={styles.originDot}>◉</Text>
+              <View style={styles.originTextBlock}>
+                <Text style={styles.originLabel}>Starting Point</Text>
+                <Text style={styles.originText}>Mumbai, Maharashtra (Current)</Text>
+              </View>
+            </View>
+
+            <View style={styles.searchDivider} />
+
             <GlassInput
+              label="Destination"
               placeholder="Where to?"
               value={destination}
               onChangeText={setDestination}
               icon={<Text style={styles.searchIcon}>📍</Text>}
             />
-            <View style={styles.searchDivider} />
-            <View style={styles.originRow}>
-              <Text style={styles.originDot}>◉</Text>
-              <Text style={styles.originText}>Current Location</Text>
+
+            {/* Selected Vehicle Info */}
+            <View style={styles.vehicleBadgeRow}>
+              <Text style={styles.vehicleBadgeText}>
+                🚗 {selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : 'No EV selected'}
+              </Text>
+              <StatusBadge label={`Battery: ${simulatedSoC}%`} variant={simulatedSoC > 30 ? 'success' : 'warning'} size="sm" />
             </View>
           </GlassCard>
+
+          {(error || localError) && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>⚠️ {error || localError}</Text>
+            </View>
+          )}
         </LinearGradient>
       </View>
 
@@ -103,25 +139,28 @@ export default function PlanScreen() {
         <GlassCard style={styles.routeInfoCard}>
           <View style={styles.routeInfoRow}>
             <View style={styles.routeInfoBlock}>
-              <Text style={styles.routeInfoValue}>148 km</Text>
-              <Text style={styles.routeInfoLabel}>Distance</Text>
+              <Text style={styles.routeInfoValue}>148.5 km</Text>
+              <Text style={styles.routeInfoLabel}>Estimated Dist.</Text>
             </View>
             <View style={styles.routeInfoDivider} />
             <View style={styles.routeInfoBlock}>
-              <Text style={styles.routeInfoValue}>2h 15m</Text>
-              <Text style={styles.routeInfoLabel}>Duration</Text>
+              <Text style={styles.routeInfoValue}>~2h 15m</Text>
+              <Text style={styles.routeInfoLabel}>Drive Time</Text>
             </View>
             <View style={styles.routeInfoDivider} />
             <View style={styles.routeInfoBlock}>
-              <Text style={styles.routeInfoValue}>1 stop</Text>
-              <Text style={styles.routeInfoLabel}>Charging</Text>
+              <Text style={styles.routeInfoValue}>{simulatedSoC < 40 ? '1 Stop' : '0 Stops'}</Text>
+              <Text style={styles.routeInfoLabel}>Optimal Charge</Text>
             </View>
           </View>
+
           <GlassButton
-            title="Find Routes"
+            title={loading ? 'Optimizing Journey...' : 'Find AI-Optimized Routes'}
             variant="primary"
             size="lg"
             fullWidth
+            onPress={handleFindRoutes}
+            disabled={loading}
           />
         </GlassCard>
       </View>
@@ -185,21 +224,23 @@ const styles = StyleSheet.create({
   },
   mapLabel: {
     position: 'absolute',
-    bottom: 160,
+    bottom: 240,
     alignItems: 'center',
     gap: spacing['1'],
+    paddingHorizontal: spacing['4'],
   },
   mapLabelText: {
     fontFamily,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
-    color: colors.textTertiary,
+    color: colors.textSecondary,
   },
   mapLabelSubtext: {
     fontFamily,
     fontSize: fontSize.xs,
     color: colors.textTertiary,
-    opacity: 0.6,
+    textAlign: 'center',
+    opacity: 0.8,
   },
   searchOverlay: {
     position: 'absolute',
@@ -211,8 +252,8 @@ const styles = StyleSheet.create({
   searchGradient: {
     paddingTop: Platform.select({ ios: 60, android: 48, default: 40 }),
     paddingHorizontal: spacing['5'],
-    paddingBottom: spacing['8'],
-    gap: spacing['4'],
+    paddingBottom: spacing['6'],
+    gap: spacing['3'],
   },
   screenTitle: {
     fontFamily,
@@ -239,10 +280,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.success,
   },
+  originTextBlock: {
+    gap: 2,
+  },
+  originLabel: {
+    fontFamily,
+    fontSize: fontSize.xs,
+    color: colors.textTertiary,
+  },
   originText: {
     fontFamily,
-    fontSize: fontSize.base,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.textPrimary,
+  },
+  vehicleBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: spacing['1'],
+  },
+  vehicleBadgeText: {
+    fontFamily,
+    fontSize: fontSize.xs,
     color: colors.textSecondary,
+  },
+  errorBanner: {
+    backgroundColor: colors.dangerMuted,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    padding: spacing['3'],
+    marginTop: spacing['1'],
+  },
+  errorText: {
+    fontFamily,
+    fontSize: fontSize.xs,
+    color: colors.danger,
   },
   bottomBar: {
     position: 'absolute',

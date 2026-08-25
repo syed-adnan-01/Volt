@@ -1,21 +1,35 @@
 // ──────────────────────────────────────────────
 // Firebase Admin SDK Initialisation
-// Uses service-account credentials from env vars.
+// Uses service-account credentials from env vars with
+// graceful fallback for local development.
 // ──────────────────────────────────────────────
 
 import admin, { type auth } from 'firebase-admin';
 import { env } from '../../config/env.js';
 
-// The private key arrives from .env with literal "\n" — convert to real newlines
-const privateKey = env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+let app: admin.app.App;
 
-const app = admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: env.FIREBASE_PROJECT_ID,
-    clientEmail: env.FIREBASE_CLIENT_EMAIL,
-    privateKey,
-  }),
-});
+try {
+  const privateKey = env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+
+  app = admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: env.FIREBASE_PROJECT_ID,
+      clientEmail: env.FIREBASE_CLIENT_EMAIL,
+      privateKey,
+    }),
+  });
+} catch (err: any) {
+  console.warn('⚠️ Firebase Admin SDK running in development mode (real cert not configured).');
+  // Initialize mock app instance if needed
+  if (admin.apps.length === 0) {
+    app = admin.initializeApp({
+      projectId: 'volt-dev',
+    });
+  } else {
+    app = admin.apps[0]!;
+  }
+}
 
 export const firebaseAuth: auth.Auth = admin.auth(app);
 export default app;

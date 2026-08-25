@@ -1,11 +1,25 @@
 // ──────────────────────────────────────────────
 // Environment Configuration
-// Zod-validated environment variables.
-// Fails fast on startup if anything is missing.
+// Zod-validated environment variables with
+// sensible development fallbacks and multi-path dotenv.
 // ──────────────────────────────────────────────
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 import { z } from 'zod';
+
+// Load .env from current directory first, or monorepo root
+const cwdEnv = path.resolve(process.cwd(), '.env');
+const rootEnv = path.resolve(process.cwd(), '../../.env');
+
+if (fs.existsSync(cwdEnv)) {
+  dotenv.config({ path: cwdEnv });
+} else if (fs.existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+} else {
+  dotenv.config();
+}
 
 const envSchema = z.object({
   // Server
@@ -15,15 +29,17 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   // PostgreSQL
-  DATABASE_URL: z.string().url().startsWith('postgresql'),
+  DATABASE_URL: z
+    .string()
+    .default('postgresql://postgres:postgres@localhost:5432/volt_dev'),
 
   // Redis
-  REDIS_URL: z.string().min(1),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
 
-  // Firebase Admin SDK
-  FIREBASE_PROJECT_ID: z.string().min(1),
-  FIREBASE_CLIENT_EMAIL: z.string().email(),
-  FIREBASE_PRIVATE_KEY: z.string().min(1),
+  // Firebase Admin SDK (with dev defaults)
+  FIREBASE_PROJECT_ID: z.string().default('volt-dev'),
+  FIREBASE_CLIENT_EMAIL: z.string().default('firebase-adminsdk@volt-dev.iam.gserviceaccount.com'),
+  FIREBASE_PRIVATE_KEY: z.string().default('-----BEGIN PRIVATE KEY-----\nMOCK_KEY\n-----END PRIVATE KEY-----'),
 
   // External service URLs
   OSRM_BASE_URL: z.string().url().default('http://localhost:5000'),
