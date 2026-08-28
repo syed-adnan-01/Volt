@@ -18,5 +18,13 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-native": "^0.76.6"
+  },
+  "dependencies": {
+    "expo-asset": "~11.0.3"
   }
 }
