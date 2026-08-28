@@ -4,8 +4,6 @@
     "module": "Node16",
     "moduleResolution": "Node16",
     "lib": ["ES2022"],
-    "outDir": "dist",
-    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -16,5 +14,6 @@
     "sourceMap": true,
     "types": ["node"]
   },
+  "files": [],
   "exclude": ["node_modules", "dist"]
 }

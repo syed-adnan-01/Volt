@@ -1,0 +1,1 @@
+{"version":3,"file":"routing.d.ts","sourceRoot":"","sources":["routing.ts"],"names":[],"mappings":"AAKA,MAAM,WAAW,aAAa;IAC5B,mCAAmC;IACnC,UAAU,EAAE,MAAM,CAAC;IACnB,gCAAgC;IAChC,eAAe,EAAE,MAAM,CAAC;IACxB,oDAAoD;IACpD,aAAa,EAAE,MAAM,CAAC;IACtB,iEAAiE;IACjE,QAAQ,EAAE,KAAK,CAAC,CAAC,MAAM,EAAE,MAAM,CAAC,CAAC,CAAC;CACnC"}
