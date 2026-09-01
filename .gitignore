@@ -53,3 +53,11 @@ __pycache__/
 ml/datasets/raw/
 ml/datasets/processed/
 ml/models/prediction_log.csv
+
+# Android / Gradle
+.gradle/
+build/
+.kotlin/
+*.apk
+*.aab
+local.properties
