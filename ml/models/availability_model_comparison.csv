@@ -1,0 +1,4 @@
+Model,F1,ROC-AUC,Inference Time (ms/prediction)
+Baseline (majority class),0.822,0.5,0.0
+Random Forest,0.77,0.645,0.0146
+XGBoost,0.814,0.695,0.0011
