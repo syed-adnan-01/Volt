@@ -45,3 +45,11 @@ web-build/
 *.p8
 *.p12
 *.mobileprovision
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+ml/datasets/raw/
+ml/datasets/processed/
+ml/models/prediction_log.csv

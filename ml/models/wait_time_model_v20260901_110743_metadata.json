@@ -1,0 +1,10 @@
+{
+  "model_name": "wait_time_model",
+  "version": "v20260901_110743",
+  "trained_at": "2026-09-01T11:07:43.088061",
+  "metrics": {
+    "val_mae": 4.524698685063352,
+    "test_mae": 4.612151927727611,
+    "test_rmse": 6.494100343640138
+  }
+}
