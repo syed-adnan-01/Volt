@@ -1,0 +1,9 @@
+{
+  "model_name": "availability_model",
+  "version": "v20260901_110742",
+  "trained_at": "2026-09-01T11:07:42.913232",
+  "metrics": {
+    "val_accuracy": 0.7550603528319406,
+    "test_accuracy": 0.7142061281337048
+  }
+}

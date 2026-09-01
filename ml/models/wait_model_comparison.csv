@@ -1,0 +1,4 @@
+Model,MAE (minutes),Inference Time (ms/prediction)
+Baseline (mean wait),5.796,0.0
+Random Forest,4.681,0.0146
+XGBoost,4.612,0.0007
