@@ -14,7 +14,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:dev": "npm run test:dev --workspaces --if-present",
-    "db:migrate": "npm run db:migrate --workspace=services/api"
+    "db:migrate": "npm run db:migrate --workspace=services/api",
+    "db:seed": "npm run db:seed --workspace=services/api"
   },
   "engines": {
     "node": ">=20.0.0"

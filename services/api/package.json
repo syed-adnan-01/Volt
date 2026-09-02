@@ -10,7 +10,8 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "clean": "rimraf dist",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.12.0",

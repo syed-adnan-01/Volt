@@ -32,4 +32,5 @@ try {
 }
 
 export const firebaseAuth: auth.Auth = admin.auth(app);
+export const firebaseMessaging: admin.messaging.Messaging = admin.messaging(app);
 export default app;

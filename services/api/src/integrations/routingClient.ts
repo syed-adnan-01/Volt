@@ -6,6 +6,7 @@
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import type { RoutingResult } from '@volt/contracts';
+import { getCachedJson, setCachedJson } from '../cache/redisCache.js';
 
 export async function getRoute(
   originLat: number,
@@ -13,6 +14,13 @@ export async function getRoute(
   destLat: number,
   destLng: number
 ): Promise<RoutingResult> {
+  // Check Redis route cache first (TTL 1 hour = 3600 seconds)
+  const cacheKey = `cache:route:${originLat.toFixed(4)},${originLng.toFixed(4)}:${destLat.toFixed(4)},${destLng.toFixed(4)}`;
+  const cachedRoute = await getCachedJson<RoutingResult>(cacheKey);
+  if (cachedRoute) {
+    return cachedRoute;
+  }
+
   const url = `${env.OSRM_BASE_URL}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full`;
   
   const controller = new AbortController();
@@ -35,12 +43,17 @@ export async function getRoute(
 
     const route = data.routes[0];
 
-    return {
+    const result: RoutingResult = {
       distanceKm: route.distance / 1000,
       durationMinutes: route.duration / 60,
       detourMinutes: 0, // Direct route has 0 detour
       geometry: [], // In a real app we decode the polyline here, skipping for MVP simplicity
     };
+
+    // Cache successful route result
+    await setCachedJson(cacheKey, result, 3600);
+
+    return result;
   } catch (error: any) {
     clearTimeout(timeout);
     
@@ -48,11 +61,15 @@ export async function getRoute(
     
     // For development (Phase 2), we gracefully fallback to a mock route so the API works independently
     const distanceKm = Math.sqrt(Math.pow(destLat - originLat, 2) + Math.pow(destLng - originLng, 2)) * 111; // Rough Haversine
-    return {
+    const result: RoutingResult = {
       distanceKm: parseFloat(distanceKm.toFixed(2)),
       durationMinutes: parseFloat((distanceKm / 1.5).toFixed(0)), // ~90km/h avg
       detourMinutes: 0,
       geometry: [],
     };
+
+    await setCachedJson(cacheKey, result, 3600);
+
+    return result;
   }
 }
