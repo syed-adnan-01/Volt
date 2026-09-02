@@ -72,6 +72,13 @@ dependencies {
   implementation(libs.okhttp.core)
   implementation(libs.okhttp.logging)
 
+  // Firebase & Auth
+  val firebaseBom = platform(libs.firebase.bom)
+  implementation(firebaseBom)
+  implementation(libs.firebase.auth)
+  implementation(libs.play.services.tasks)
+  implementation(libs.kotlinx.coroutines.play.services)
+
   // Tooling & Testing
   debugImplementation(libs.androidx.compose.ui.tooling)
   testImplementation(libs.junit)
