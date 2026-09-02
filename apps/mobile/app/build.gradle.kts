@@ -77,6 +77,7 @@ dependencies {
   implementation(firebaseBom)
   implementation(libs.firebase.auth)
   implementation(libs.play.services.tasks)
+  implementation(libs.play.services.auth)
   implementation(libs.kotlinx.coroutines.play.services)
 
   // Tooling & Testing

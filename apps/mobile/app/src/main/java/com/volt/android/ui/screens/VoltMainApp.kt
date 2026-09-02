@@ -21,12 +21,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.volt.android.ui.components.ProfileDialog
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
 import com.volt.android.ui.theme.VoltCyan
@@ -41,7 +45,60 @@ fun VoltMainApp(
     viewModel: VoltViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showProfileDialog by remember { mutableStateOf(false) }
 
+    // ──────────────────────────────────────────────
+    // 1. Show AuthScreen if not authenticated
+    // ──────────────────────────────────────────────
+    if (!uiState.isAuthenticated) {
+        AuthScreen(
+            vehicles = uiState.allVehicles,
+            isLoading = uiState.isAuthLoading,
+            errorMessage = uiState.authError,
+            onSignIn = { email, password ->
+                viewModel.loginWithEmail(email, password)
+            },
+            onSignUp = { name, email, password, vehicleId ->
+                viewModel.signUp(name, email, password, vehicleId)
+            },
+            onGoogleSignInSuccess = { name, email, idToken ->
+                viewModel.onGoogleSignInResult(name, email, idToken)
+            },
+            onGoogleSignInError = { error ->
+                viewModel.onGoogleSignInError(error)
+            },
+            onGuestSignIn = {
+                viewModel.loginAsGuest()
+            },
+            onClearError = {
+                viewModel.clearAuthError()
+            }
+        )
+        return
+    }
+
+    // ──────────────────────────────────────────────
+    // 2. Profile Dialog Modal
+    // ──────────────────────────────────────────────
+    if (showProfileDialog) {
+        ProfileDialog(
+            user = uiState.currentUser,
+            selectedVehicle = uiState.selectedVehicle,
+            onDismiss = { showProfileDialog = false },
+            onSignOut = {
+                showProfileDialog = false
+                viewModel.logout()
+            },
+            onSwitchAccount = {
+                showProfileDialog = false
+                viewModel.logout()
+            }
+        )
+    }
+
+    // ──────────────────────────────────────────────
+    // 3. Main Authenticated App Layout
+    // ──────────────────────────────────────────────
     Scaffold(
         bottomBar = {
             NavigationBar(
@@ -133,7 +190,8 @@ fun VoltMainApp(
                     onSelectVehicle = { viewModel.selectVehicle(it) },
                     onTogglePreconditioning = { viewModel.togglePreconditioning() },
                     onToggleRangeMode = { viewModel.toggleRangeMode() },
-                    onNavigateToTripPlanner = { viewModel.selectTab(VoltNavTab.TRIP_PLANNER) }
+                    onNavigateToTripPlanner = { viewModel.selectTab(VoltNavTab.TRIP_PLANNER) },
+                    onOpenProfile = { showProfileDialog = true }
                 )
                 VoltNavTab.TRIP_PLANNER -> TripPlannerScreen(
                     uiState = uiState,

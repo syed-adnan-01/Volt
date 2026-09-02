@@ -8,7 +8,9 @@ import com.volt.android.data.models.ChargingStation
 import com.volt.android.data.models.RerouteAlert
 import com.volt.android.data.models.RouteStrategy
 import com.volt.android.data.models.TripPlanResult
+import com.volt.android.data.models.UserProfile
 import com.volt.android.data.models.VehicleProfile
+import com.volt.android.data.remote.AuthSessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +40,11 @@ data class VoltUiState(
     val filterFastOnly: Boolean = false,
     val filterAvailableOnly: Boolean = false,
     val isLoading: Boolean = false,
-    val networkError: String? = null
+    val networkError: String? = null,
+    val currentUser: UserProfile? = null,
+    val isAuthenticated: Boolean = false,
+    val isAuthLoading: Boolean = false,
+    val authError: String? = null
 )
 
 class VoltViewModel(
@@ -54,10 +60,15 @@ class VoltViewModel(
     private val _filterAvailableOnly = MutableStateFlow(false)
     val filterAvailableOnly: StateFlow<Boolean> = _filterAvailableOnly.asStateFlow()
 
+    private val _isAuthLoading = MutableStateFlow(false)
+    private val _authError = MutableStateFlow<String?>(null)
+
     init {
-        viewModelScope.launch {
-            repository.loadVehicles()
-            repository.loadStations()
+        if (AuthSessionManager.isAuthenticated.value) {
+            viewModelScope.launch {
+                repository.loadVehicles()
+                repository.loadStations()
+            }
         }
     }
 
@@ -72,32 +83,45 @@ class VoltViewModel(
     }
 
     val uiState: StateFlow<VoltUiState> = combine(
-        repository.selectedVehicle,
-        repository.vehicles,
-        repository.telemetry,
-        _filteredStations,
-        repository.activeTripPlan,
-        repository.routeStrategies,
-        repository.selectedStrategyId,
-        repository.rerouteAlert,
-        _currentTab,
-        repository.isLoading,
-        repository.networkError
-    ) { params: Array<Any?> ->
-        val vehicle = params[0] as VehicleProfile
+        combine(
+            repository.selectedVehicle,
+            repository.vehicles,
+            repository.telemetry,
+            _filteredStations,
+            repository.activeTripPlan,
+            repository.routeStrategies,
+            repository.selectedStrategyId,
+            repository.rerouteAlert
+        ) { p1 -> p1 },
+        combine(
+            _currentTab,
+            repository.isLoading,
+            repository.networkError,
+            AuthSessionManager.currentUser,
+            AuthSessionManager.isAuthenticated,
+            _isAuthLoading,
+            _authError
+        ) { p2 -> p2 }
+    ) { p1, p2 ->
+        val vehicle = p1[0] as VehicleProfile
         @Suppress("UNCHECKED_CAST")
-        val allVehicles = params[1] as List<VehicleProfile>
-        val telemetry = params[2] as BatteryTelemetry
+        val allVehicles = p1[1] as List<VehicleProfile>
+        val telemetry = p1[2] as BatteryTelemetry
         @Suppress("UNCHECKED_CAST")
-        val stations = params[3] as List<ChargingStation>
-        val tripPlan = params[4] as TripPlanResult
+        val stations = p1[3] as List<ChargingStation>
+        val tripPlan = p1[4] as TripPlanResult
         @Suppress("UNCHECKED_CAST")
-        val strategies = params[5] as List<RouteStrategy>
-        val strategyId = params[6] as String
-        val reroute = params[7] as RerouteAlert?
-        val tab = params[8] as VoltNavTab
-        val loading = params[9] as Boolean
-        val error = params[10] as String?
+        val strategies = p1[5] as List<RouteStrategy>
+        val strategyId = p1[6] as String
+        val reroute = p1[7] as RerouteAlert?
+
+        val tab = p2[0] as VoltNavTab
+        val loading = p2[1] as Boolean
+        val netError = p2[2] as String?
+        val user = p2[3] as UserProfile?
+        val authed = p2[4] as Boolean
+        val authLoading = p2[5] as Boolean
+        val authErr = p2[6] as String?
 
         VoltUiState(
             selectedVehicle = vehicle,
@@ -112,7 +136,11 @@ class VoltViewModel(
             filterFastOnly = _filterFastOnly.value,
             filterAvailableOnly = _filterAvailableOnly.value,
             isLoading = loading,
-            networkError = error
+            networkError = netError,
+            currentUser = user,
+            isAuthenticated = authed,
+            isAuthLoading = authLoading,
+            authError = authErr
         )
     }.stateIn(
         scope = viewModelScope,
@@ -123,9 +151,124 @@ class VoltViewModel(
             telemetry = repository.telemetry.value,
             stations = repository.stations.value,
             tripPlan = repository.activeTripPlan.value,
-            routeStrategies = repository.routeStrategies.value
+            routeStrategies = repository.routeStrategies.value,
+            currentUser = AuthSessionManager.currentUser.value,
+            isAuthenticated = AuthSessionManager.isAuthenticated.value
         )
     )
+
+    // ──────────────────────────────────────────────
+    // Authentication Actions
+    // ──────────────────────────────────────────────
+
+    fun loginWithEmail(email: String, pass: String) {
+        _isAuthLoading.value = true
+        _authError.value = null
+        val res = AuthSessionManager.signInWithEmail(email, pass)
+        res.onSuccess {
+            _isAuthLoading.value = false
+            _authError.value = null
+            // Trigger data refresh on login
+            viewModelScope.launch {
+                repository.loadVehicles()
+                repository.loadStations()
+            }
+        }.onFailure { ex ->
+            _isAuthLoading.value = false
+            _authError.value = ex.message ?: "Authentication failed."
+        }
+    }
+
+    fun signUp(name: String, email: String, pass: String, preferredVehicleId: String) {
+        _isAuthLoading.value = true
+        _authError.value = null
+        val res = AuthSessionManager.signUp(name, email, pass, preferredVehicleId)
+        res.onSuccess { profile ->
+            _isAuthLoading.value = false
+            _authError.value = null
+            // Select user's preferred vehicle
+            val matchedVehicle = repository.sampleVehicles.find { it.id == preferredVehicleId }
+            if (matchedVehicle != null) {
+                repository.selectVehicle(matchedVehicle)
+            }
+            viewModelScope.launch {
+                repository.loadVehicles()
+                repository.loadStations()
+            }
+        }.onFailure { ex ->
+            _isAuthLoading.value = false
+            _authError.value = ex.message ?: "Account creation failed."
+        }
+    }
+
+    fun onGoogleSignInResult(
+        name: String,
+        email: String,
+        idToken: String? = null
+    ) {
+        _isAuthLoading.value = true
+        _authError.value = null
+        val res = AuthSessionManager.signInWithGoogleAccount(name, email, idToken)
+        res.onSuccess {
+            _isAuthLoading.value = false
+            _authError.value = null
+            viewModelScope.launch {
+                repository.loadVehicles()
+                repository.loadStations()
+            }
+        }.onFailure { ex ->
+            _isAuthLoading.value = false
+            _authError.value = ex.message ?: "Google authentication failed."
+        }
+    }
+
+    fun onGoogleSignInError(errorMessage: String) {
+        _isAuthLoading.value = false
+        _authError.value = errorMessage
+    }
+
+    fun loginWithGoogle() {
+        _isAuthLoading.value = true
+        _authError.value = null
+        val res = AuthSessionManager.signInWithGoogle()
+        res.onSuccess {
+            _isAuthLoading.value = false
+            _authError.value = null
+            viewModelScope.launch {
+                repository.loadVehicles()
+                repository.loadStations()
+            }
+        }.onFailure { ex ->
+            _isAuthLoading.value = false
+            _authError.value = ex.message ?: "Google authentication failed."
+        }
+    }
+
+    fun loginAsGuest() {
+        _isAuthLoading.value = true
+        _authError.value = null
+        val res = AuthSessionManager.signInAsGuest()
+        res.onSuccess {
+            _isAuthLoading.value = false
+            _authError.value = null
+            viewModelScope.launch {
+                repository.loadVehicles()
+                repository.loadStations()
+            }
+        }
+    }
+
+    fun logout() {
+        AuthSessionManager.signOut()
+    }
+
+    fun clearAuthError() {
+        _authError.value = null
+    }
+
+    // ──────────────────────────────────────────────
+    // Navigation & App Tab Actions
+    // ──────────────────────────────────────────────
 
     fun selectTab(tab: VoltNavTab) {
         _currentTab.value = tab

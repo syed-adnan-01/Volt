@@ -67,9 +67,12 @@ fun DashboardScreen(
     onTogglePreconditioning: () -> Unit,
     onToggleRangeMode: () -> Unit,
     onNavigateToTripPlanner: () -> Unit,
+    onOpenProfile: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val userName = uiState.currentUser?.name ?: "Pilot"
+    val initials = userName.split(" ").mapNotNull { it.firstOrNull()?.uppercase() }.take(2).joinToString("")
 
     Column(
         modifier = modifier
@@ -86,7 +89,10 @@ fun DashboardScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onOpenProfile() }
+                ) {
                     Box(
                         modifier = Modifier
                             .size(10.dp)
@@ -96,7 +102,7 @@ fun DashboardScreen(
                     Text(
                         text = "VOLT EV PLATFORM",
                         color = VoltCyan,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
@@ -107,33 +113,71 @@ fun DashboardScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Black
                 )
-                Text(
-                    text = uiState.selectedVehicle.trim,
-                    color = VoltTextSecondary,
-                    fontSize = 12.sp
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(VoltCardElevated)
-                    .border(1.dp, VoltCardBorder, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.BatteryChargingFull,
-                        contentDescription = "Health",
-                        tint = VoltEmerald,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onOpenProfile() }
+                        .padding(vertical = 2.dp)
+                ) {
                     Text(
-                        text = "${uiState.telemetry.batteryHealthPercent}% Health",
-                        color = VoltEmerald,
+                        text = uiState.selectedVehicle.trim,
+                        color = VoltTextSecondary,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = " • $userName ⚙️",
+                        color = VoltCyan,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Health Chip
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(VoltCardElevated)
+                        .border(1.dp, VoltCardBorder, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.BatteryChargingFull,
+                            contentDescription = "Health",
+                            tint = VoltEmerald,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${uiState.telemetry.batteryHealthPercent}%",
+                            color = VoltEmerald,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Profile Avatar Button
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(VoltCardElevated)
+                        .border(1.5.dp, VoltCyan, CircleShape)
+                        .clickable { onOpenProfile() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = initials.ifBlank { "V" },
+                        color = VoltCyan,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black
                     )
                 }
             }

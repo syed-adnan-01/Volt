@@ -7,26 +7,33 @@ import okhttp3.Response
 import java.util.concurrent.TimeUnit
 
 /**
- * OkHttp Interceptor that retrieves the active Firebase ID token
- * and attaches it as an `Authorization: Bearer <token>` header.
+ * OkHttp Interceptor that retrieves the active authentication token
+ * (from AuthSessionManager or Firebase) and attaches it as an
+ * `Authorization: Bearer <token>` header.
  */
 class AuthInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
-        val auth = FirebaseAuth.getInstance()
-        val currentUser = auth.currentUser
 
-        val token: String? = try {
-            if (currentUser != null) {
-                val task = currentUser.getIdToken(false)
-                val result = Tasks.await(task, 5, TimeUnit.SECONDS)
-                result.token
-            } else {
+        // 1. First check AuthSessionManager token (covers custom email, Google, guest, demo tokens)
+        var token: String? = AuthSessionManager.currentToken
+
+        // 2. If null, attempt fallback to active Firebase user if initialized
+        if (token.isNullOrBlank()) {
+            token = try {
+                val auth = FirebaseAuth.getInstance()
+                val currentUser = auth.currentUser
+                if (currentUser != null) {
+                    val task = currentUser.getIdToken(false)
+                    val result = Tasks.await(task, 5, TimeUnit.SECONDS)
+                    result.token
+                } else {
+                    null
+                }
+            } catch (e: Throwable) {
                 null
             }
-        } catch (e: Exception) {
-            null
         }
 
         val requestBuilder = originalRequest.newBuilder()
