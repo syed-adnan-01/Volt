@@ -1,0 +1,186 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "VOLT API Gateway",
+    "version": "1.0.0",
+    "description": "AI-Powered Predictive EV Journey Optimization Platform API Gateway"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "firebaseAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Firebase ID Token"
+      }
+    },
+    "schemas": {
+      "StandardResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "type": "object", "nullable": true },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "requestId": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "required": ["success", "meta"]
+      },
+      "Vehicle": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "user_id": { "type": "string", "format": "uuid" },
+          "make": { "type": "string" },
+          "model": { "type": "string" },
+          "battery_capacity_kwh": { "type": "number" },
+          "usable_capacity_kwh": { "type": "number" },
+          "consumption_kwh_per_km": { "type": "number" },
+          "battery_health_percent": { "type": "number" },
+          "reserve_soc_percent": { "type": "number" },
+          "max_charging_power_kw": { "type": "number" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "make", "model", "battery_capacity_kwh", "usable_capacity_kwh", "consumption_kwh_per_km", "max_charging_power_kw"]
+      },
+      "TripPlanRequest": {
+        "type": "object",
+        "properties": {
+          "vehicle_id": { "type": "string", "format": "uuid" },
+          "current_soc": { "type": "number", "minimum": 0, "maximum": 100 },
+          "origin_lat": { "type": "number", "minimum": -90, "maximum": 90 },
+          "origin_lng": { "type": "number", "minimum": -180, "maximum": 180 },
+          "dest_lat": { "type": "number", "minimum": -90, "maximum": 90 },
+          "dest_lng": { "type": "number", "minimum": -180, "maximum": 180 }
+        },
+        "required": ["vehicle_id", "current_soc", "origin_lat", "origin_lng", "dest_lat", "dest_lng"]
+      },
+      "ChargingStation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "operator": { "type": "string" },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "max_power_kw": { "type": "number" },
+          "available_connectors": { "type": "integer" }
+        },
+        "required": ["id", "name"]
+      },
+      "DeviceTokenRequest": {
+        "type": "object",
+        "properties": {
+          "fcm_token": { "type": "string" },
+          "platform": { "type": "string", "enum": ["android", "ios", "web"], "default": "android" }
+        },
+        "required": ["fcm_token"]
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check Probe",
+        "responses": {
+          "200": { "description": "All dependencies healthy" },
+          "503": { "description": "One or more dependencies degraded" }
+        }
+      }
+    },
+    "/users/me": {
+      "get": {
+        "summary": "Get authenticated user profile",
+        "security": [{ "firebaseAuth": [] }],
+        "responses": {
+          "200": { "description": "User profile returned" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/users/me/device-token": {
+      "post": {
+        "summary": "Register or update FCM device token",
+        "security": [{ "firebaseAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeviceTokenRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Device token registered" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/vehicles": {
+      "get": {
+        "summary": "List vehicles owned by user",
+        "security": [{ "firebaseAuth": [] }],
+        "responses": {
+          "200": { "description": "List of user vehicles" }
+        }
+      },
+      "post": {
+        "summary": "Create new vehicle profile",
+        "security": [{ "firebaseAuth": [] }],
+        "responses": {
+          "201": { "description": "Vehicle created" }
+        }
+      }
+    },
+    "/trips": {
+      "post": {
+        "summary": "Orchestrate multi-stop trip plan",
+        "security": [{ "firebaseAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TripPlanRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Trip planned and persisted" },
+          "422": { "description": "Route unreachable" }
+        }
+      }
+    },
+    "/stations": {
+      "get": {
+        "summary": "Search charging stations in geographic radius",
+        "security": [{ "firebaseAuth": [] }],
+        "parameters": [
+          { "name": "lat", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "lng", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "radiusKm", "in": "query", "schema": { "type": "number", "default": 5 } }
+        ],
+        "responses": {
+          "200": { "description": "List of nearby stations" }
+        }
+      }
+    }
+  }
+}

@@ -2,11 +2,11 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "moduleResolution": "Node16",
     "paths": {
       "@volt/contracts": ["../../packages/contracts/dist/index.d.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src/**/*", "tests/**/*"]
 }
