@@ -18,9 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Warning
@@ -53,6 +53,7 @@ import com.volt.android.ui.theme.VoltCardElevated
 import com.volt.android.ui.theme.VoltCyan
 import com.volt.android.ui.theme.VoltDarkBg
 import com.volt.android.ui.theme.VoltEmerald
+import com.volt.android.ui.theme.VoltPurple
 import com.volt.android.ui.theme.VoltRose
 import com.volt.android.ui.theme.VoltTextMuted
 import com.volt.android.ui.theme.VoltTextPrimary
@@ -64,6 +65,7 @@ fun SimulatorScreen(
     uiState: VoltUiState,
     onSimulateDrive: (Double, Double, Double) -> Unit,
     onSimulateCharge: (Int, Double) -> Unit,
+    onResetBaseline: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var speedKmH by remember { mutableFloatStateOf(85f) }
@@ -79,29 +81,81 @@ fun SimulatorScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Screen Header
+        // Screen Header with Sandbox Badging
         Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Science,
+                        contentDescription = "Sandbox Lab",
+                        tint = VoltPurple,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "OFFLINE WHAT-IF SANDBOX",
+                        color = VoltPurple,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(VoltPurple.copy(alpha = 0.2f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "CLIENT PHYSICS",
+                        color = VoltPurple,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             Text(
-                text = "TELEMETRY SIMULATION ENGINE",
-                color = VoltCyan,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            Text(
-                text = "Real-Time EV Physics Sandbox",
+                text = "Vehicle Telemetry Lab",
                 color = VoltTextPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Black
             )
             Text(
-                text = "Simulate aerodynamic drag, thermal stress, and high-rate DC charging.",
+                text = "Instant 60 FPS slider experimentation for aerodynamic drag, thermal stress, and high-rate DC charging curves.",
                 color = VoltTextSecondary,
                 fontSize = 13.sp
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Distinction Notice
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(VoltCardElevated)
+                .padding(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(Icons.Default.Info, contentDescription = "Notice", tint = VoltCyan, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Sandbox runs client-side kinematic physics for offline exploration. For server-optimized OSRM routing with live charger availability, visit the Journey tab.",
+                    color = VoltTextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // Mini Battery Gauge Status
         BatteryGauge(
@@ -136,7 +190,7 @@ fun SimulatorScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Environment & Physics Sliders Card
         Card(
@@ -146,12 +200,29 @@ fun SimulatorScreen(
             border = BorderStroke(1.dp, VoltCardBorder)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Physics & Environmental Parameters",
-                    color = VoltTextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Environmental & Physics Sliders",
+                        color = VoltTextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    OutlinedButton(
+                        onClick = onResetBaseline,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, VoltCardBorder),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = VoltCyan, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reset Baseline", color = VoltCyan, fontSize = 11.sp)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 

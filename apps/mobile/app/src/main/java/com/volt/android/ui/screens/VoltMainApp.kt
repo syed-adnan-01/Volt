@@ -157,7 +157,8 @@ fun VoltMainApp(
                 VoltNavTab.SIMULATOR -> SimulatorScreen(
                     uiState = uiState,
                     onSimulateDrive = { dist, speed, temp -> viewModel.simulateDrive(dist, speed, temp) },
-                    onSimulateCharge = { mins, power -> viewModel.simulateCharge(mins, power) }
+                    onSimulateCharge = { mins, power -> viewModel.simulateCharge(mins, power) },
+                    onResetBaseline = { viewModel.resetSandboxBaseline() }
                 )
                 VoltNavTab.HEALTH -> HealthScreen(
                     uiState = uiState

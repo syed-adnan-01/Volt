@@ -155,6 +155,10 @@ class VoltViewModel(
         repository.simulateCharge(durationMinutes, chargerPowerKw)
     }
 
+    fun resetSandboxBaseline() {
+        repository.resetTelemetryBaseline()
+    }
+
     fun planTrip(
         origin: String,
         destination: String,

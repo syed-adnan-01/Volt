@@ -476,6 +476,10 @@ class VoltRepository {
         _routeStrategies.value = generateRouteStrategies(newPlan, vehicle)
     }
 
+    fun resetTelemetryBaseline() {
+        _telemetry.value = createInitialTelemetry(_selectedVehicle.value)
+    }
+
     fun togglePreconditioning() {
         _telemetry.update { current ->
             current.copy(isPreconditioning = !current.isPreconditioning)
