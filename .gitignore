@@ -41,10 +41,10 @@ VOLT_Member1_Updated_Implementation_Plan.md
 # Firebase Secrets
 firebase/*.json
 
-# Expo / React Native
+# Expo / React Native root folders (if any)
 .expo/
-ios/
-android/
+/ios/
+/android/
 web-build/
 *.jks
 *.p8
