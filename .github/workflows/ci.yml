@@ -30,8 +30,8 @@ jobs:
       - name: Run Workspace Linters
         run: npm run lint --if-present
 
-      - name: Run Workspace Tests
-        run: npm test
-
       - name: Build All Workspaces
         run: npm run build
+
+      - name: Run Workspace Tests
+        run: npm test
