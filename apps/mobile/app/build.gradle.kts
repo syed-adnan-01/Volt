@@ -87,8 +87,9 @@ dependencies {
   implementation(libs.play.services.auth)
   implementation(libs.kotlinx.coroutines.play.services)
 
-  // Google Maps SDK
+  // Google Maps & Location SDK
   implementation(libs.play.services.maps)
+  implementation(libs.play.services.location)
   implementation(libs.maps.compose)
 
   // Tooling & Testing

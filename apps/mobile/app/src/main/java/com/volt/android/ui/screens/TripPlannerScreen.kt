@@ -51,9 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.model.LatLng
+import com.volt.android.data.LocationSearchService
 import com.volt.android.data.PolylineDecoder
 import com.volt.android.data.models.RouteStrategy
 import com.volt.android.data.models.StopType
+import com.volt.android.ui.components.LocationInputField
 import com.volt.android.ui.components.MarkerType
 import com.volt.android.ui.components.RerouteBanner
 import com.volt.android.ui.components.RouteMarker
@@ -200,40 +202,59 @@ fun TripPlannerScreen(
             border = BorderStroke(1.dp, VoltCardBorder)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                OutlinedTextField(
+                // Starting Location with Recommendations & GPS Current Location
+                LocationInputField(
+                    label = "Starting Location",
                     value = originInput,
                     onValueChange = { originInput = it },
-                    label = { Text("Starting Location", color = VoltTextSecondary) },
-                    leadingIcon = {
-                        Icon(Icons.Default.Place, contentDescription = "Origin", tint = VoltCyan)
+                    onLocationSelected = { suggestion ->
+                        currentOriginLat = suggestion.latitude
+                        currentOriginLng = suggestion.longitude
+                        if (destinationInput.isNotBlank() && currentDestLat != 0.0) {
+                            val autoDist = LocationSearchService.calculateDistanceKm(
+                                currentOriginLat, currentOriginLng,
+                                currentDestLat, currentDestLng
+                            )
+                            distanceInput = autoDist.toString()
+                        }
                     },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = VoltTextPrimary,
-                        unfocusedTextColor = VoltTextPrimary,
-                        focusedBorderColor = VoltCyan,
-                        unfocusedBorderColor = VoltCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    leadingIcon = Icons.Default.Place,
+                    iconTint = VoltCyan,
+                    isStartingLocation = true,
+                    onCurrentLocationAcquired = { lat, lng, name ->
+                        currentOriginLat = lat
+                        currentOriginLng = lng
+                        if (destinationInput.isNotBlank() && currentDestLat != 0.0) {
+                            val autoDist = LocationSearchService.calculateDistanceKm(
+                                currentOriginLat, currentOriginLng,
+                                currentDestLat, currentDestLng
+                            )
+                            distanceInput = autoDist.toString()
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedTextField(
+                // Destination Location with Recommendations & Auto-Distance Estimation
+                LocationInputField(
+                    label = "Destination",
                     value = destinationInput,
                     onValueChange = { destinationInput = it },
-                    label = { Text("Destination", color = VoltTextSecondary) },
-                    leadingIcon = {
-                        Icon(Icons.Default.LocationOn, contentDescription = "Destination", tint = VoltEmerald)
+                    onLocationSelected = { suggestion ->
+                        currentDestLat = suggestion.latitude
+                        currentDestLng = suggestion.longitude
+                        if (originInput.isNotBlank() && currentOriginLat != 0.0) {
+                            val autoDist = LocationSearchService.calculateDistanceKm(
+                                currentOriginLat, currentOriginLng,
+                                currentDestLat, currentDestLng
+                            )
+                            distanceInput = autoDist.toString()
+                        }
                     },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = VoltTextPrimary,
-                        unfocusedTextColor = VoltTextPrimary,
-                        focusedBorderColor = VoltEmerald,
-                        unfocusedBorderColor = VoltCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    leadingIcon = Icons.Default.LocationOn,
+                    iconTint = VoltEmerald,
+                    isStartingLocation = false
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))

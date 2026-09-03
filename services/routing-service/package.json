@@ -7,7 +7,7 @@
     "build": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "test": "tsx --test src/tests/evModel.test.ts src/tests/chargerCandidates.test.ts src/tests/singleStopOptimizer.test.ts src/tests/multiStopOptimizer.test.ts src/tests/routePlanner.test.ts src/tests/server.test.ts src/tests/optimizationModes.test.ts src/tests/rerouteOptimizer.test.ts src/tests/chargerFiltering.test.ts src/tests/strategyBenchmark.test.ts"
+    "test": "tsx --test src/tests/evModel.test.ts src/tests/chargerCandidates.test.ts src/tests/singleStopOptimizer.test.ts src/tests/multiStopOptimizer.test.ts src/tests/routePlanner.test.ts src/tests/server.test.ts src/tests/optimizationModes.test.ts src/tests/rerouteOptimizer.test.ts src/tests/chargerFiltering.test.ts src/tests/strategyBenchmark.test.ts src/tests/e2eScenarios.test.ts"
   },
   "keywords": [],
   "author": "",

@@ -18,6 +18,7 @@ navigationCompose = "2.8.3"
 firebaseBom = "33.7.0"
 playServicesTasks = "18.2.0"
 playServicesAuth = "21.3.0"
+playServicesLocation = "21.3.0"
 mapsCompose = "6.4.1"
 playServicesMaps = "19.0.0"
 secretsPlugin = "2.0.1"
@@ -49,6 +50,7 @@ firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 play-services-tasks = { module = "com.google.android.gms:play-services-tasks", version.ref = "playServicesTasks" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 play-services-maps = { module = "com.google.android.gms:play-services-maps", version.ref = "playServicesMaps" }
 maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
