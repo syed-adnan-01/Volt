@@ -14,6 +14,8 @@ export interface BatteryResult {
   reachable: boolean;
   /** Battery risk score (0 = safe, 1 = critical) */
   riskScore: number;
+  /** Remaining safety buffer margin (%) */
+  safetyMarginPercent?: number;
 }
 
 export interface MultiStopLegInput {

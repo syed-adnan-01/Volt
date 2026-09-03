@@ -9,8 +9,9 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspace=@volt/contracts && npm run build --workspace=@volt/battery-engine && npm run build --workspace=@volt/api && npm run build --workspace=routing-service",
     "dev": "npm run dev --workspace=services/api",
+    "dev:routing": "npm run dev --workspace=routing-service",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:dev": "npm run test:dev --workspaces --if-present",

@@ -118,6 +118,9 @@ function resolvePredictionsMap(
  * evaluating complete route costs with battery safety margin enforcement,
  * optimization modes, route alternatives, connector filtering, and timeout protection.
  */
+// Module-level shared route cache to avoid duplicate OSRM HTTP calls across runs
+const sharedRouteCache = new Map<string, Promise<RouteResult>>();
+
 export async function optimizeMultiStopRoute(
   input: MultiStopOptimizerInput
 ): Promise<MultiStopOptimizerResult> {
@@ -138,20 +141,18 @@ export async function optimizeMultiStopRoute(
     connectorTypes,
     minPowerKw,
     blacklistedChargerIds,
-    optimizationTimeoutMs = 5000,
+    optimizationTimeoutMs = 15000,
     returnAlternativesCount = 2
   } = input;
 
   const predMap = resolvePredictionsMap(input.predictions);
 
-  // Memoized route cache to avoid duplicate OSRM HTTP calls
-  const routeCache = new Map<string, Promise<RouteResult>>();
   const getMemoizedRoute = (fromLon: number, fromLat: number, toLon: number, toLat: number): Promise<RouteResult> => {
     const key = `${fromLon.toFixed(4)},${fromLat.toFixed(4)};${toLon.toFixed(4)},${toLat.toFixed(4)}`;
-    let cached = routeCache.get(key);
+    let cached = sharedRouteCache.get(key);
     if (!cached) {
       cached = getRoute(fromLon, fromLat, toLon, toLat);
-      routeCache.set(key, cached);
+      sharedRouteCache.set(key, cached);
     }
     return cached;
   };

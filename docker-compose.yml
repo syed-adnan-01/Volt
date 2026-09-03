@@ -49,6 +49,18 @@ services:
       timeout: 5s
       retries: 3
 
+  routing-service:
+    build:
+      context: .
+      dockerfile: services/routing-service/Dockerfile
+    container_name: volt-routing-service
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+
   api:
     build:
       context: .
@@ -62,6 +74,8 @@ services:
         condition: service_healthy
       prediction-service:
         condition: service_started
+      routing-service:
+        condition: service_started
     ports:
       - '3000:3000'
     environment:
@@ -70,6 +84,7 @@ services:
       - DATABASE_URL=postgresql://volt_user:volt_password@postgres:5432/volt_db
       - REDIS_URL=redis://redis:6379
       - ML_API_URL=http://prediction-service:8000
+      - OPTIMIZER_SERVICE_URL=http://routing-service:3001
       - OSRM_BASE_URL=https://router.project-osrm.org
       - LOG_LEVEL=info
 
