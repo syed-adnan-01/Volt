@@ -8,16 +8,20 @@ describe("REST API Server Tests", () => {
   const PORT = 3099; // Test port
   const BASE_URL = `http://localhost:${PORT}`;
 
-  before((_, done) => {
-    const app = createServer();
-    server = app.listen(PORT, () => {
-      done();
+  before(() => {
+    return new Promise<void>((resolve) => {
+      const app = createServer();
+      server = app.listen(PORT, () => {
+        resolve();
+      });
     });
   });
 
-  after((_, done) => {
-    server.close(() => {
-      done();
+  after(() => {
+    return new Promise<void>((resolve) => {
+      server.close(() => {
+        resolve();
+      });
     });
   });
 

@@ -39,7 +39,7 @@ describe("EV Route Planner Integration Tests", () => {
 
     const firstStop = result.stops[0];
     assert.ok(firstStop);
-    assert.equal(firstStop.socBeforeChargingPct >= 0, true);
+    assert.equal(firstStop!.socBeforeChargingPct >= 0, true);
     assert.equal(result.destinationSoCPct >= DEFAULT_EV_VEHICLE.minSoCBufferPct, true);
   });
 

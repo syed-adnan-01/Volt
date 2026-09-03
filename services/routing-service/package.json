@@ -4,6 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "build": "tsc --noEmit",
     "test": "tsx --test src/tests/evModel.test.ts src/tests/chargerCandidates.test.ts src/tests/singleStopOptimizer.test.ts src/tests/multiStopOptimizer.test.ts src/tests/routePlanner.test.ts src/tests/server.test.ts src/tests/optimizationModes.test.ts src/tests/rerouteOptimizer.test.ts src/tests/chargerFiltering.test.ts src/tests/strategyBenchmark.test.ts"
   },
   "keywords": [],
@@ -11,14 +12,14 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@types/node": "^26.4.0",
-    "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
   },
   "dependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "cors": "^2.8.6",
+    "cors": "^2.8.5",
     "express": "^5.2.1"
   }
 }
