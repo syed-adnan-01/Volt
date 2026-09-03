@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ElectricMeter
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Timeline
@@ -37,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,9 +46,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.android.gms.maps.model.LatLng
+import com.volt.android.data.PolylineDecoder
 import com.volt.android.data.models.VehicleProfile
 import com.volt.android.ui.components.BatteryGauge
+import com.volt.android.ui.components.MarkerType
 import com.volt.android.ui.components.MetricCard
+import com.volt.android.ui.components.RouteMarker
+import com.volt.android.ui.components.VoltMapView
 import com.volt.android.ui.theme.VoltAmber
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
@@ -357,6 +364,69 @@ fun DashboardScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // ──────────────────────────────────────────────
+        // Mini Route Map Preview (shows last planned route)
+        // ──────────────────────────────────────────────
+        val lastRouteGeometry = uiState.tripPlan.geometry
+        if (!lastRouteGeometry.isNullOrBlank()) {
+            val previewRoutePoints = remember(lastRouteGeometry) {
+                PolylineDecoder.decode(lastRouteGeometry)
+            }
+            val previewMarkers = remember(uiState.tripPlan) {
+                listOf(
+                    RouteMarker(
+                        position = previewRoutePoints.firstOrNull() ?: LatLng(0.0, 0.0),
+                        title = uiState.tripPlan.origin,
+                        type = MarkerType.ORIGIN
+                    ),
+                    RouteMarker(
+                        position = previewRoutePoints.lastOrNull() ?: LatLng(0.0, 0.0),
+                        title = uiState.tripPlan.destination,
+                        type = MarkerType.DESTINATION
+                    )
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToTripPlanner() },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Map,
+                    contentDescription = "Map",
+                    tint = VoltCyan,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Last Planned Route",
+                    color = VoltTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "${uiState.tripPlan.origin} → ${uiState.tripPlan.destination}",
+                    color = VoltTextSecondary,
+                    fontSize = 11.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Box(modifier = Modifier.clickable { onNavigateToTripPlanner() }) {
+                VoltMapView(
+                    routePoints = previewRoutePoints,
+                    markers = previewMarkers,
+                    mapHeight = 160.dp,
+                    isInteractive = false
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         // Navigation CTA
         Button(

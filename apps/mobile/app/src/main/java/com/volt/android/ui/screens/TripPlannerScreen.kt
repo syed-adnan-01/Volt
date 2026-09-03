@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
@@ -49,9 +50,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.android.gms.maps.model.LatLng
+import com.volt.android.data.PolylineDecoder
 import com.volt.android.data.models.RouteStrategy
 import com.volt.android.data.models.StopType
+import com.volt.android.ui.components.MarkerType
 import com.volt.android.ui.components.RerouteBanner
+import com.volt.android.ui.components.RouteMarker
+import com.volt.android.ui.components.VoltMapView
 import com.volt.android.ui.theme.VoltAmber
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
@@ -299,6 +305,85 @@ fun TripPlannerScreen(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // ──────────────────────────────────────────────
+        // Interactive Route Map (Google Maps)
+        // ──────────────────────────────────────────────
+        val geometry = uiState.tripPlan.geometry
+        if (!geometry.isNullOrBlank()) {
+            val routePoints = remember(geometry) {
+                PolylineDecoder.decode(geometry)
+            }
+
+            // Build markers from trip plan stops
+            val mapMarkers = remember(uiState.tripPlan.stops, currentOriginLat, currentOriginLng, currentDestLat, currentDestLng) {
+                val markers = mutableListOf<RouteMarker>()
+                // Origin marker
+                markers.add(
+                    RouteMarker(
+                        position = LatLng(currentOriginLat, currentOriginLng),
+                        title = uiState.tripPlan.origin.ifBlank { "Origin" },
+                        snippet = "Start • ${uiState.tripPlan.stops.firstOrNull()?.arrivalSoC?.toInt() ?: 80}% SoC",
+                        type = MarkerType.ORIGIN
+                    )
+                )
+                // Charging stop markers (use interpolated positions along route)
+                uiState.tripPlan.stops
+                    .filter { it.type == StopType.CHARGER_STOP }
+                    .forEach { stop ->
+                        val fraction = if (uiState.tripPlan.distanceKm > 0) {
+                            (stop.distanceFromOriginKm / uiState.tripPlan.distanceKm).coerceIn(0.0, 1.0)
+                        } else 0.5
+                        val pointIndex = (fraction * (routePoints.size - 1)).toInt().coerceIn(0, routePoints.lastIndex)
+                        markers.add(
+                            RouteMarker(
+                                position = routePoints.getOrElse(pointIndex) { LatLng(currentOriginLat, currentOriginLng) },
+                                title = stop.name,
+                                snippet = "⚡ ${stop.arrivalSoC.toInt()}% → ${stop.departureSoC.toInt()}% (+${stop.chargeDurationMinutes}m)",
+                                type = MarkerType.CHARGER
+                            )
+                        )
+                    }
+                // Destination marker
+                markers.add(
+                    RouteMarker(
+                        position = LatLng(currentDestLat, currentDestLng),
+                        title = uiState.tripPlan.destination.ifBlank { "Destination" },
+                        snippet = "Arrive • ${uiState.tripPlan.arrivalSoC.toInt()}% SoC",
+                        type = MarkerType.DESTINATION
+                    )
+                )
+                markers
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Map,
+                    contentDescription = "Map",
+                    tint = VoltCyan,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Route Visualization",
+                    color = VoltTextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            VoltMapView(
+                routePoints = routePoints,
+                markers = mapMarkers,
+                mapHeight = 280.dp
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+        }
 
         // ──────────────────────────────────────────────
         // Multi-Strategy Ranked Comparison (Phase 4)
