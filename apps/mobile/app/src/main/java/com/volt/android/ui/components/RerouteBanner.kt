@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.volt.android.data.models.RerouteAlert
 import com.volt.android.ui.theme.VoltAmber
+import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
 import com.volt.android.ui.theme.VoltCyan
 import com.volt.android.ui.theme.VoltDarkBg
@@ -52,7 +53,7 @@ fun RerouteBanner(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = VoltDarkBg),
+        colors = CardDefaults.cardColors(containerColor = VoltCardBg),
         border = BorderStroke(1.5.dp, VoltAmber)
     ) {
         Column(
@@ -175,7 +176,7 @@ fun RerouteBanner(
                     colors = ButtonDefaults.buttonColors(containerColor = VoltAmber),
                     modifier = Modifier.weight(1.3f)
                 ) {
-                    Text("Accept Reroute", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Accept Reroute", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }

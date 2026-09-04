@@ -32,9 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.volt.android.ui.theme.VoltAmber
-import com.volt.android.ui.theme.VoltCardElevated
+import com.volt.android.ui.theme.VoltBlueLight
 import com.volt.android.ui.theme.VoltCyan
 import com.volt.android.ui.theme.VoltEmerald
+import com.volt.android.ui.theme.VoltGradientEnd
+import com.volt.android.ui.theme.VoltGradientStart
 import com.volt.android.ui.theme.VoltRose
 import com.volt.android.ui.theme.VoltTextMuted
 import com.volt.android.ui.theme.VoltTextPrimary
@@ -56,7 +58,7 @@ fun BatteryGauge(
     )
 
     val gaugeColor = when {
-        socPercent >= 50.0 -> VoltEmerald
+        socPercent >= 50.0 -> VoltCyan
         socPercent >= 25.0 -> VoltCyan
         socPercent >= 15.0 -> VoltAmber
         else -> VoltRose
@@ -87,9 +89,9 @@ fun BatteryGauge(
             if (sweepAngle > 0) {
                 drawArc(
                     brush = Brush.sweepGradient(
-                        0.0f to gaugeColor,
-                        0.7f to VoltCyan,
-                        1.0f to gaugeColor
+                        0.0f to VoltGradientStart,
+                        0.7f to VoltGradientEnd,
+                        1.0f to VoltGradientStart
                     ),
                     startAngle = 150f,
                     sweepAngle = sweepAngle,
@@ -109,8 +111,8 @@ fun BatteryGauge(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .background(VoltCardElevated, CircleShape)
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .background(VoltBlueLight, CircleShape)
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Bolt,
@@ -126,6 +128,13 @@ fun BatteryGauge(
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Bolt,
+                    contentDescription = "EV Battery",
+                    tint = VoltCyan,
+                    modifier = Modifier.size(20.dp)
+                )
             }
 
             Text(
@@ -151,3 +160,4 @@ fun BatteryGauge(
         }
     }
 }
+

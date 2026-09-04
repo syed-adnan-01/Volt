@@ -1,20 +1,19 @@
 package com.volt.android.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
+private val LightColorScheme = lightColorScheme(
     primary = VoltCyan,
-    onPrimary = Color(0xFF00363D),
-    primaryContainer = Color(0xFF004F58),
-    onPrimaryContainer = Color(0xFF97F0FF),
+    onPrimary = Color.White,
+    primaryContainer = VoltBlueLight,
+    onPrimaryContainer = Color(0xFF1E40AF),
     secondary = VoltEmerald,
-    onSecondary = Color(0xFF003822),
-    secondaryContainer = Color(0xFF005234),
-    onSecondaryContainer = Color(0xFF6FF7B3),
+    onSecondary = Color.White,
+    secondaryContainer = VoltEmeraldLight,
+    onSecondaryContainer = Color(0xFF065F46),
     tertiary = VoltPurple,
     background = VoltDarkBg,
     onBackground = VoltTextPrimary,
@@ -29,11 +28,11 @@ private val DarkColorScheme = darkColorScheme(
 
 @Composable
 fun VoltTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = DarkColorScheme,
+        colorScheme = LightColorScheme,
         content = content
     )
 }
+

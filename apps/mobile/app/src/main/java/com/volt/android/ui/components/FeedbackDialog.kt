@@ -294,7 +294,7 @@ fun FeedbackDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = VoltCyan),
                         modifier = Modifier.weight(1.3f)
                     ) {
-                        Text("Submit Report", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("Submit Report", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }

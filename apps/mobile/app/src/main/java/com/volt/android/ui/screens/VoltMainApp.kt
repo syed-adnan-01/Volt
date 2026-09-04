@@ -1,15 +1,21 @@
 package com.volt.android.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.EvStation
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
@@ -25,19 +31,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.volt.android.data.LiveLocationTracker
 import com.volt.android.ui.components.ProfileDialog
+import com.volt.android.ui.theme.VoltBlueLight
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
 import com.volt.android.ui.theme.VoltCyan
 import com.volt.android.ui.theme.VoltDarkBg
 import com.volt.android.ui.theme.VoltTextMuted
+import com.volt.android.ui.theme.VoltTextPrimary
 import com.volt.android.ui.theme.VoltTextSecondary
 import com.volt.android.ui.viewmodel.VoltNavTab
 import com.volt.android.ui.viewmodel.VoltViewModel
@@ -101,82 +110,85 @@ fun VoltMainApp(
     }
 
     // ──────────────────────────────────────────────
-    // 3. Main Authenticated App Layout
+    // 3. Main Authenticated App Layout (Clean Light Theme)
     // ──────────────────────────────────────────────
     Scaffold(
         bottomBar = {
             NavigationBar(
                 containerColor = VoltCardBg,
                 contentColor = VoltCyan,
-                tonalElevation = 8.dp
+                tonalElevation = 6.dp,
+                modifier = Modifier
+                    .shadow(elevation = 8.dp, spotColor = Color(0x10000000))
+                    .border(1.dp, VoltCardBorder)
             ) {
                 NavigationBarItem(
                     selected = uiState.currentTab == VoltNavTab.DASHBOARD,
                     onClick = { viewModel.selectTab(VoltNavTab.DASHBOARD) },
-                    icon = { Icon(Icons.Default.Speed, contentDescription = "Dashboard", modifier = Modifier.size(20.dp)) },
-                    label = { Text("Live", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(22.dp)) },
+                    label = { Text("Home", fontSize = 11.sp, fontWeight = if (uiState.currentTab == VoltNavTab.DASHBOARD) FontWeight.Bold else FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = VoltCyan,
                         selectedTextColor = VoltCyan,
-                        indicatorColor = VoltCyan.copy(alpha = 0.2f),
+                        indicatorColor = VoltBlueLight,
                         unselectedIconColor = VoltTextMuted,
-                        unselectedTextColor = VoltTextMuted
+                        unselectedTextColor = VoltTextSecondary
                     )
                 )
 
                 NavigationBarItem(
                     selected = uiState.currentTab == VoltNavTab.TRIP_PLANNER,
                     onClick = { viewModel.selectTab(VoltNavTab.TRIP_PLANNER) },
-                    icon = { Icon(Icons.Default.Navigation, contentDescription = "Journey", modifier = Modifier.size(20.dp)) },
-                    label = { Text("Journey", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) },
+                    icon = { Icon(Icons.Default.Map, contentDescription = "Map", modifier = Modifier.size(22.dp)) },
+                    label = { Text("Map", fontSize = 11.sp, fontWeight = if (uiState.currentTab == VoltNavTab.TRIP_PLANNER) FontWeight.Bold else FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = VoltCyan,
                         selectedTextColor = VoltCyan,
-                        indicatorColor = VoltCyan.copy(alpha = 0.2f),
+                        indicatorColor = VoltBlueLight,
                         unselectedIconColor = VoltTextMuted,
-                        unselectedTextColor = VoltTextMuted
+                        unselectedTextColor = VoltTextSecondary
                     )
                 )
 
                 NavigationBarItem(
                     selected = uiState.currentTab == VoltNavTab.CHARGERS,
                     onClick = { viewModel.selectTab(VoltNavTab.CHARGERS) },
-                    icon = { Icon(Icons.Default.EvStation, contentDescription = "Chargers", modifier = Modifier.size(20.dp)) },
-                    label = { Text("Chargers", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) },
+                    icon = { Icon(Icons.Default.Bolt, contentDescription = "Charge", modifier = Modifier.size(24.dp)) },
+                    label = { Text("Charge", fontSize = 11.sp, fontWeight = if (uiState.currentTab == VoltNavTab.CHARGERS) FontWeight.Bold else FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = VoltCyan,
                         selectedTextColor = VoltCyan,
-                        indicatorColor = VoltCyan.copy(alpha = 0.2f),
+                        indicatorColor = VoltBlueLight,
                         unselectedIconColor = VoltTextMuted,
-                        unselectedTextColor = VoltTextMuted
+                        unselectedTextColor = VoltTextSecondary
                     )
                 )
 
                 NavigationBarItem(
                     selected = uiState.currentTab == VoltNavTab.SIMULATOR,
                     onClick = { viewModel.selectTab(VoltNavTab.SIMULATOR) },
-                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Sandbox", modifier = Modifier.size(20.dp)) },
-                    label = { Text("Sandbox", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) },
+                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Sandbox", modifier = Modifier.size(22.dp)) },
+                    label = { Text("Sandbox", fontSize = 11.sp, fontWeight = if (uiState.currentTab == VoltNavTab.SIMULATOR) FontWeight.Bold else FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = VoltCyan,
                         selectedTextColor = VoltCyan,
-                        indicatorColor = VoltCyan.copy(alpha = 0.2f),
+                        indicatorColor = VoltBlueLight,
                         unselectedIconColor = VoltTextMuted,
-                        unselectedTextColor = VoltTextMuted
+                        unselectedTextColor = VoltTextSecondary
                     )
                 )
 
                 NavigationBarItem(
                     selected = uiState.currentTab == VoltNavTab.HEALTH,
                     onClick = { viewModel.selectTab(VoltNavTab.HEALTH) },
-                    icon = { Icon(Icons.Default.BatteryChargingFull, contentDescription = "Health", modifier = Modifier.size(20.dp)) },
-                    label = { Text("Health", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) },
+                    icon = { Icon(Icons.Default.BatteryChargingFull, contentDescription = "Health", modifier = Modifier.size(22.dp)) },
+                    label = { Text("Health", fontSize = 11.sp, fontWeight = if (uiState.currentTab == VoltNavTab.HEALTH) FontWeight.Bold else FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = VoltCyan,
                         selectedTextColor = VoltCyan,
-                        indicatorColor = VoltCyan.copy(alpha = 0.2f),
+                        indicatorColor = VoltBlueLight,
                         unselectedIconColor = VoltTextMuted,
-                        unselectedTextColor = VoltTextMuted
+                        unselectedTextColor = VoltTextSecondary
                     )
                 )
             }

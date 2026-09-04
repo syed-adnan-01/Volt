@@ -322,7 +322,7 @@ fun SimulatorScreen(
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = VoltCyan)
                     ) {
-                        Text("Drive 75 km", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Drive 75 km", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -356,9 +356,9 @@ fun SimulatorScreen(
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = VoltEmerald)
                     ) {
-                        Icon(Icons.Default.Bolt, contentDescription = "Charge", tint = Color.Black, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Bolt, contentDescription = "Charge", tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Charge +15m", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Charge +15m", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Button(

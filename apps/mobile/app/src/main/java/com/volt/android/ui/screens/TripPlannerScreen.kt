@@ -61,6 +61,7 @@ import com.volt.android.ui.components.RerouteBanner
 import com.volt.android.ui.components.RouteMarker
 import com.volt.android.ui.components.VoltMapView
 import com.volt.android.ui.theme.VoltAmber
+import com.volt.android.ui.theme.VoltBlueLight
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
 import com.volt.android.ui.theme.VoltCardElevated
@@ -297,14 +298,14 @@ fun TripPlannerScreen(
                 ) {
                     if (uiState.isLoading) {
                         CircularProgressIndicator(
-                            color = Color.Black,
+                            color = Color.White,
                             strokeWidth = 2.dp,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Optimizing Route...",
-                            color = Color.Black,
+                            color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -312,13 +313,13 @@ fun TripPlannerScreen(
                         Icon(
                             Icons.Default.Navigation,
                             contentDescription = "Optimize",
-                            tint = Color.Black,
+                            tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Run Reachability & Optimization Engine",
-                            color = Color.Black,
+                            color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -588,7 +589,7 @@ fun TripPlannerScreen(
                         ) {
                             Text(
                                 text = "${index + 1}",
-                                color = Color.Black,
+                                color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -654,10 +655,10 @@ fun RouteStrategyCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isSelected) VoltCardElevated else VoltCardBg),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isSelected) VoltBlueLight else VoltCardBg),
         border = BorderStroke(
-            1.5.dp,
+            if (isSelected) 1.5.dp else 1.dp,
             if (isSelected) VoltCyan else VoltCardBorder
         )
     ) {
@@ -734,9 +735,9 @@ fun RouteStrategyCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(VoltDarkBg)
-                    .padding(8.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(VoltCardElevated)
+                    .padding(10.dp)
             ) {
                 Row(verticalAlignment = Alignment.Top) {
                     Text(

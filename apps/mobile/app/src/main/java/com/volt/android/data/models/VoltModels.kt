@@ -81,11 +81,17 @@ data class ChargingStation(
 data class RouteStop(
     @SerialName("name") val name: String,
     @SerialName("type") val type: StopType,
-    @SerialName("distance_from_origin_km") val distanceFromOriginKm: Double,
-    @SerialName("arrival_soc") val arrivalSoC: Double,
-    @SerialName("departure_soc") val departureSoC: Double,
+    @SerialName("distance_from_origin_km") val distanceFromOriginKm: Double = 0.0,
+    @SerialName("arrival_soc") val arrivalSoC: Double = 0.0,
+    @SerialName("departure_soc") val departureSoC: Double = 0.0,
     @SerialName("charge_duration_minutes") val chargeDurationMinutes: Int = 0,
-    @SerialName("energy_added_kwh") val energyAddedKWh: Double = 0.0
+    @SerialName("energy_added_kwh") val energyAddedKWh: Double = 0.0,
+    @SerialName("station_id") val stationId: String? = null,
+    @SerialName("charging_duration_minutes") val chargingDurationMinutes: Int = chargeDurationMinutes,
+    @SerialName("expected_wait_minutes") val expectedWaitMinutes: Int = 0,
+    @SerialName("latitude") val latitude: Double? = null,
+    @SerialName("longitude") val longitude: Double? = null,
+    @SerialName("power_kw") val powerKw: Int = 0
 )
 
 @Serializable

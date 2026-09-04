@@ -55,27 +55,28 @@ enum class MarkerType {
     ORIGIN, DESTINATION, CHARGER, WAYPOINT, USER_LOCATION
 }
 
-// Dark-themed map style JSON for Google Maps matching the VOLT design language
-private val VOLT_DARK_MAP_STYLE = """
+// Clean light-themed map style JSON for Google Maps matching the VOLT light design language
+private val VOLT_LIGHT_MAP_STYLE = """
 [
-  { "elementType": "geometry", "stylers": [{ "color": "#0B0F19" }] },
-  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0B0F19" }] },
+  { "elementType": "geometry", "stylers": [{ "color": "#F8FAFC" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#FFFFFF" }, { "weight": 2 }] },
   { "elementType": "labels.text.fill", "stylers": [{ "color": "#64748B" }] },
-  { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#94A3B8" }] },
-  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748B" }] },
-  { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#131C2E" }] },
+  { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#1E293B" }] },
+  { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#F1F5F9" }] },
+  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#94A3B8" }] },
+  { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#ECFDF5" }] },
   { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#10B981" }] },
-  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1A263D" }] },
-  { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#22324E" }] },
-  { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#94A3B8" }] },
-  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#22324E" }] },
-  { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1A263D" }] },
-  { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#F9FAFB" }] },
-  { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#1A263D" }] },
-  { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#94A3B8" }] },
-  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#131C2E" }] },
-  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#00B4D8" }] },
-  { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#0B0F19" }] }
+  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#FFFFFF" }] },
+  { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#E2E8F0" }] },
+  { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748B" }] },
+  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#FFFFFF" }] },
+  { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#CBD5E1" }] },
+  { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#0F172A" }] },
+  { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#F1F5F9" }] },
+  { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748B" }] },
+  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#E0F2FE" }] },
+  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#0284C7" }] },
+  { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#FFFFFF" }] }
 ]
 """.trimIndent()
 
@@ -131,7 +132,7 @@ fun VoltMapView(
 
     val mapStyle = remember {
         try {
-            MapStyleOptions(VOLT_DARK_MAP_STYLE)
+            MapStyleOptions(VOLT_LIGHT_MAP_STYLE)
         } catch (_: Exception) {
             null
         }

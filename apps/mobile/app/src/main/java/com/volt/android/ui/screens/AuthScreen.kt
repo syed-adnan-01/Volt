@@ -280,7 +280,7 @@ fun AuthScreen(
                     ) {
                         Text(
                             text = "Sign In",
-                            color = if (selectedTab == AuthTab.SIGN_IN) Color.Black else VoltTextSecondary,
+                            color = if (selectedTab == AuthTab.SIGN_IN) Color.White else VoltTextSecondary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
@@ -301,7 +301,7 @@ fun AuthScreen(
                     ) {
                         Text(
                             text = "Create Account",
-                            color = if (selectedTab == AuthTab.SIGN_UP) Color.Black else VoltTextSecondary,
+                            color = if (selectedTab == AuthTab.SIGN_UP) Color.White else VoltTextSecondary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
@@ -584,7 +584,7 @@ fun AuthScreen(
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
-                                color = Color.Black,
+                                color = Color.White,
                                 modifier = Modifier.size(22.dp),
                                 strokeWidth = 2.dp
                             )
@@ -593,13 +593,13 @@ fun AuthScreen(
                                 Icon(
                                     imageVector = Icons.Default.Bolt,
                                     contentDescription = null,
-                                    tint = Color.Black,
+                                    tint = Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (selectedTab == AuthTab.SIGN_IN) "Sign In to Volt" else "Create Account & Start Driving",
-                                    color = Color.Black,
+                                    color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 )

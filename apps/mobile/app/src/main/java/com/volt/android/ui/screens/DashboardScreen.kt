@@ -2,6 +2,7 @@ package com.volt.android.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,11 +23,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ElectricMeter
+import androidx.compose.material.icons.filled.EvStation
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Timeline
@@ -35,6 +42,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +50,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,12 +65,15 @@ import com.volt.android.ui.components.MetricCard
 import com.volt.android.ui.components.RouteMarker
 import com.volt.android.ui.components.VoltMapView
 import com.volt.android.ui.theme.VoltAmber
+import com.volt.android.ui.theme.VoltBlueLight
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
 import com.volt.android.ui.theme.VoltCardElevated
 import com.volt.android.ui.theme.VoltCyan
 import com.volt.android.ui.theme.VoltDarkBg
 import com.volt.android.ui.theme.VoltEmerald
+import com.volt.android.ui.theme.VoltGradientEnd
+import com.volt.android.ui.theme.VoltGradientStart
 import com.volt.android.ui.theme.VoltPurple
 import com.volt.android.ui.theme.VoltTextMuted
 import com.volt.android.ui.theme.VoltTextPrimary
@@ -78,7 +91,7 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    val userName = uiState.currentUser?.name ?: "Pilot"
+    val userName = uiState.currentUser?.name ?: "Alex"
     val initials = userName.split(" ").mapNotNull { it.firstOrNull()?.uppercase() }.take(2).joinToString("")
 
     Column(
@@ -86,145 +99,138 @@ fun DashboardScreen(
             .fillMaxSize()
             .background(VoltDarkBg)
             .verticalScroll(scrollState)
-            .padding(16.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // App Header
+        // ──────────────────────────────────────────────
+        // 1. Top Bar: Avatar + Greeting + Notification Bell
+        // ──────────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onOpenProfile() }
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(VoltEmerald, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "VOLT EV PLATFORM",
-                        color = VoltCyan,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                }
-                Text(
-                    text = "${uiState.selectedVehicle.make} ${uiState.selectedVehicle.model}",
-                    color = VoltTextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onOpenProfile() }
-                        .padding(vertical = 2.dp)
-                ) {
-                    Text(
-                        text = uiState.selectedVehicle.trim,
-                        color = VoltTextSecondary,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = " • $userName ⚙️",
-                        color = VoltCyan,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onOpenProfile() }
             ) {
-                // Health Chip
+                // Profile Avatar with subtle border
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(VoltCardElevated)
-                        .border(1.dp, VoltCardBorder, RoundedCornerShape(20.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.BatteryChargingFull,
-                            contentDescription = "Health",
-                            tint = VoltEmerald,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${uiState.telemetry.batteryHealthPercent}%",
-                            color = VoltEmerald,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Profile Avatar Button
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
-                        .background(VoltCardElevated)
-                        .border(1.5.dp, VoltCyan, CircleShape)
-                        .clickable { onOpenProfile() },
+                        .background(VoltBlueLight)
+                        .border(1.5.dp, VoltCyan.copy(alpha = 0.5f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = initials.ifBlank { "V" },
+                        text = initials.ifBlank { "A" },
                         color = VoltCyan,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Black
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Hello, $userName!",
+                        color = VoltTextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Ready to charge your EV?",
+                        color = VoltTextSecondary,
+                        fontSize = 12.sp
                     )
                 }
             }
+
+            // Notification Bell Chip
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(VoltCardBg)
+                    .border(1.dp, VoltCardBorder, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notifications",
+                    tint = VoltTextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
-        // Vehicle Selector Carousel
+        // ──────────────────────────────────────────────
+        // 2. Search Pill
+        // ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(VoltCardElevated)
+                .border(1.dp, VoltCardBorder, RoundedCornerShape(24.dp))
+                .clickable { onNavigateToTripPlanner() }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = VoltTextMuted,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Search destination or charging station...",
+                color = VoltTextMuted,
+                fontSize = 13.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // ──────────────────────────────────────────────
+        // 3. Vehicle Selector Carousel
+        // ──────────────────────────────────────────────
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(uiState.allVehicles) { vehicle ->
                 val isSelected = vehicle.id == uiState.selectedVehicle.id
-                Card(
+                Box(
                     modifier = Modifier
-                        .clickable { onSelectVehicle(vehicle) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSelected) VoltCardElevated else VoltCardBg
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSelected) VoltCyan else VoltCardBorder
-                    )
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) VoltCyan else VoltCardBg)
+                        .border(
+                            1.dp,
+                            if (isSelected) VoltCyan else VoltCardBorder,
+                            RoundedCornerShape(20.dp)
+                        )
+                        .clickable { onSelectVehicle(vehicle) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.DirectionsCar,
                             contentDescription = vehicle.model,
-                            tint = if (isSelected) VoltCyan else VoltTextSecondary,
-                            modifier = Modifier.size(16.dp)
+                            tint = if (isSelected) Color.White else VoltTextSecondary,
+                            modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "${vehicle.make} ${vehicle.model}",
-                            color = if (isSelected) VoltTextPrimary else VoltTextSecondary,
+                            color = if (isSelected) Color.White else VoltTextPrimary,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
@@ -233,19 +239,309 @@ fun DashboardScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // ──────────────────────────────────────────────
+        // 4. Hero Vehicle Card (Tesla Model 3, 62% • 312 km)
+        // ──────────────────────────────────────────────
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = 2.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    spotColor = Color(0x0F000000)
+                ),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = VoltCardBg),
+            border = BorderStroke(1.dp, VoltCardBorder)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Central Radial Battery Gauge
+                BatteryGauge(
+                    socPercent = uiState.telemetry.socPercent,
+                    estimatedRangeKm = uiState.telemetry.estimatedRangeKm,
+                    currentEnergyKwh = uiState.telemetry.currentEnergyKWh,
+                    isCharging = uiState.telemetry.isCharging
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Vehicle Name & Specs
+                Text(
+                    text = "${uiState.selectedVehicle.make} ${uiState.selectedVehicle.model}",
+                    color = VoltTextSecondary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${uiState.telemetry.socPercent.toInt()}%",
+                        color = VoltTextPrimary,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "• ${uiState.telemetry.estimatedRangeKm.toInt()} km",
+                        color = VoltTextSecondary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        // ──────────────────────────────────────────────
+        // 5. "This month" Section (Energy Charged, You Saved, Charging Sessions)
+        // ──────────────────────────────────────────────
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "This month",
+                color = VoltTextPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = VoltCardBg),
+                border = BorderStroke(1.dp, VoltCardBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Item 1: Energy Charged
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(VoltCardElevated),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.EvStation,
+                                contentDescription = "Energy Charged",
+                                tint = VoltCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column {
+                            Text(
+                                text = "Energy Charged",
+                                color = VoltTextSecondary,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "${(uiState.selectedVehicle.batteryCapacityKWh * 1.8).toInt()} kWh",
+                                color = VoltTextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Item 2: Your Saved
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(VoltCardElevated),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AttachMoney,
+                                contentDescription = "Your Saved",
+                                tint = VoltEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column {
+                            Text(
+                                text = "Your Saved",
+                                color = VoltTextSecondary,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "$24.60",
+                                color = VoltTextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Item 3: Charging Sessions
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(VoltCardElevated),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = "Charging Sessions",
+                                tint = VoltAmber,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column {
+                            Text(
+                                text = "Charging Sessions",
+                                color = VoltTextSecondary,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "18 Completed",
+                                color = VoltTextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        // ──────────────────────────────────────────────
+        // 6. Recent Sessions Section
+        // ──────────────────────────────────────────────
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recent Sessions",
+                    color = VoltTextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "View all",
+                    color = VoltCyan,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { onNavigateToTripPlanner() }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val primaryStation = uiState.stations.firstOrNull()
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = VoltCardBg),
+                border = BorderStroke(1.dp, VoltCardBorder)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(VoltBlueLight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Place,
+                                contentDescription = "Station",
+                                tint = VoltCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                text = primaryStation?.name ?: "GreenVolt Station",
+                                color = VoltTextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "May 20, 2026 • 09:30 AM",
+                                color = VoltTextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "$12.45",
+                            color = VoltTextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "24.6 kWh",
+                            color = VoltTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Central Radial Battery Gauge
-        BatteryGauge(
-            socPercent = uiState.telemetry.socPercent,
-            estimatedRangeKm = uiState.telemetry.estimatedRangeKm,
-            currentEnergyKwh = uiState.telemetry.currentEnergyKWh,
-            isCharging = uiState.telemetry.isCharging
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Telemetry Grid (2x2)
+        // ──────────────────────────────────────────────
+        // 7. Telemetry Grid (2x2)
+        // ──────────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -294,14 +590,16 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Quick Energy Action Controls
+        // ──────────────────────────────────────────────
+        // 8. AI Battery Optimizations
+        // ──────────────────────────────────────────────
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = VoltCardBg),
             border = BorderStroke(1.dp, VoltCardBorder)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "AI Battery Optimizations",
                     color = VoltTextPrimary,
@@ -317,9 +615,9 @@ fun DashboardScreen(
                     OutlinedButton(
                         onClick = onTogglePreconditioning,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (uiState.telemetry.isPreconditioning) VoltCyan.copy(alpha = 0.2f) else Color.Transparent
+                            containerColor = if (uiState.telemetry.isPreconditioning) VoltBlueLight else Color.Transparent
                         ),
                         border = BorderStroke(1.dp, if (uiState.telemetry.isPreconditioning) VoltCyan else VoltCardBorder)
                     ) {
@@ -333,6 +631,7 @@ fun DashboardScreen(
                         Text(
                             text = if (uiState.telemetry.isPreconditioning) "Preconditioning" else "Precondition",
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = if (uiState.telemetry.isPreconditioning) VoltCyan else VoltTextSecondary
                         )
                     }
@@ -340,9 +639,9 @@ fun DashboardScreen(
                     OutlinedButton(
                         onClick = onToggleRangeMode,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (uiState.telemetry.isRangeMode) VoltEmerald.copy(alpha = 0.2f) else Color.Transparent
+                            containerColor = if (uiState.telemetry.isRangeMode) Color(0xFFECFDF5) else Color.Transparent
                         ),
                         border = BorderStroke(1.dp, if (uiState.telemetry.isRangeMode) VoltEmerald else VoltCardBorder)
                     ) {
@@ -356,6 +655,7 @@ fun DashboardScreen(
                         Text(
                             text = if (uiState.telemetry.isRangeMode) "Max Range ON" else "Range Mode",
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = if (uiState.telemetry.isRangeMode) VoltEmerald else VoltTextSecondary
                         )
                     }
@@ -366,7 +666,7 @@ fun DashboardScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // ──────────────────────────────────────────────
-        // Mini Route Map Preview (shows last planned route)
+        // 9. Mini Route Map Preview (if available)
         // ──────────────────────────────────────────────
         val lastRouteGeometry = uiState.tripPlan.geometry
         if (!lastRouteGeometry.isNullOrBlank()) {
@@ -416,7 +716,12 @@ fun DashboardScreen(
             }
             Spacer(modifier = Modifier.height(6.dp))
 
-            Box(modifier = Modifier.clickable { onNavigateToTripPlanner() }) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .border(1.dp, VoltCardBorder, RoundedCornerShape(16.dp))
+                    .clickable { onNavigateToTripPlanner() }
+            ) {
                 VoltMapView(
                     routePoints = previewRoutePoints,
                     markers = previewMarkers,
@@ -428,25 +733,30 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Navigation CTA
-        Button(
-            onClick = onNavigateToTripPlanner,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = VoltCyan)
+        // ──────────────────────────────────────────────
+        // 10. Gradient CTA Button
+        // ──────────────────────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(VoltGradientStart, VoltGradientEnd)
+                    )
+                )
+                .clickable { onNavigateToTripPlanner() },
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "Plan AI-Optimized Journey ➔",
-                color = Color.Black,
+                color = Color.White,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(modifier = Modifier.height(60.dp))
+        Spacer(modifier = Modifier.height(30.dp))
     }
 }
-
-private fun Modifier.border(width: androidx.compose.ui.unit.Dp, color: Color, shape: androidx.compose.ui.graphics.Shape): Modifier =
-    this.then(Modifier.background(color = Color.Transparent, shape = shape))
