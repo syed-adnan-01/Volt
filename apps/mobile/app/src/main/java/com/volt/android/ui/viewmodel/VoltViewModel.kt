@@ -1,5 +1,8 @@
 package com.volt.android.ui.viewmodel
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
@@ -12,6 +15,7 @@ import com.volt.android.data.models.RouteStrategy
 import com.volt.android.data.models.TripPlanResult
 import com.volt.android.data.models.UserProfile
 import com.volt.android.data.models.VehicleProfile
+import com.volt.android.data.models.StopType
 import com.volt.android.data.remote.AuthSessionManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -267,20 +271,6 @@ class VoltViewModel(
         }
     }
 
-    fun loginAsGuest() {
-        _isAuthLoading.value = true
-        _authError.value = null
-        val res = AuthSessionManager.signInAsGuest()
-        res.onSuccess {
-            _isAuthLoading.value = false
-            _authError.value = null
-            viewModelScope.launch {
-                repository.loadVehicles()
-                repository.loadStations()
-            }
-        }
-    }
-
     fun logout() {
         AuthSessionManager.signOut()
     }
@@ -332,10 +322,11 @@ class VoltViewModel(
         originLat: Double = 37.7749,
         originLng: Double = -122.4194,
         destLat: Double = 39.0968,
-        destLng: Double = -120.0324
+        destLng: Double = -120.0324,
+        batteryPercent: Double = 80.0
     ) {
         viewModelScope.launch {
-            repository.planTrip(origin, destination, distanceKm, originLat, originLng, destLat, destLng)
+            repository.planTrip(origin, destination, distanceKm, originLat, originLng, destLat, destLng, batteryPercent)
         }
     }
 
@@ -404,8 +395,62 @@ class VoltViewModel(
         _userLocation.value = null
     }
 
+    // ──────────────────────────────────────────────
+    // Google Maps Turn-by-Turn Navigation Intent
+    // ──────────────────────────────────────────────
+
+    /**
+     * Launches Google Maps with the calculated route for turn-by-turn navigation.
+     * Includes EV charging stop waypoints in the navigation path.
+     * Falls back to a direct destination navigation if no waypoints exist.
+     */
+    fun launchGoogleMapsNavigation(context: Context) {
+        val tripPlan = uiState.value.tripPlan
+        val stops = tripPlan.stops.filter { it.type == StopType.CHARGER_STOP }
+
+        // Build waypoints from charging stops that have lat/lng
+        val waypointParts = stops.mapNotNull { stop ->
+            if (stop.latitude != null && stop.longitude != null) {
+                "${stop.latitude},${stop.longitude}"
+            } else null
+        }
+
+        // Get destination coordinates from the trip plan's destination stop
+        val destStop = tripPlan.stops.lastOrNull { it.type == StopType.DESTINATION }
+        val destCoords = if (destStop?.latitude != null && destStop.longitude != null) {
+            "${destStop.latitude},${destStop.longitude}"
+        } else {
+            // Fallback: use the destination name for geocoding
+            Uri.encode(tripPlan.destination)
+        }
+
+        val uriString = if (waypointParts.isNotEmpty()) {
+            // Google Maps direction mode with waypoints
+            val waypointStr = waypointParts.joinToString("|")
+            "https://www.google.com/maps/dir/?api=1&destination=$destCoords&waypoints=$waypointStr&travelmode=driving&dir_action=navigate"
+        } else {
+            // Direct navigation to destination
+            "google.navigation:q=$destCoords&mode=d"
+        }
+
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriString))
+            intent.setPackage("com.google.android.apps.maps")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            // Fallback: open in browser if Google Maps is not installed
+            try {
+                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriString))
+                browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(browserIntent)
+            } catch (_: Exception) { }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         locationJob?.cancel()
     }
 }
+

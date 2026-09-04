@@ -37,8 +37,13 @@ object AuthSessionManager {
         if (!savedJson.isNullOrBlank()) {
             try {
                 val profile = json.decodeFromString(UserProfile.serializer(), savedJson)
-                _currentUser.value = profile
-                _isAuthenticated.value = true
+                // Disallow demo/guest sessions from bypassing login
+                if (profile.isGuest || profile.token?.startsWith("demo-") == true) {
+                    signOut()
+                } else {
+                    _currentUser.value = profile
+                    _isAuthenticated.value = true
+                }
             } catch (e: Exception) {
                 // If decoding fails, reset session
                 _currentUser.value = null
@@ -140,22 +145,6 @@ object AuthSessionManager {
             name = "Adnan Syed (Google Connected)",
             email = "driver.google@gmail.com"
         )
-    }
-
-    fun signInAsGuest(): Result<UserProfile> {
-        val token = "demo-driver-token"
-        val profile = UserProfile(
-            id = "demo-user-1",
-            name = "Volt Guest Pilot",
-            email = "driver@volt.app",
-            phone = "+1 555-0199",
-            role = "guest_pilot",
-            token = token,
-            isGuest = true,
-            preferredVehicleId = "v1"
-        )
-        saveSession(profile)
-        return Result.success(profile)
     }
 
     fun signOut() {

@@ -22,12 +22,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.AltRoute
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,9 +40,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,13 +92,14 @@ data class RoutePreset(
 @Composable
 fun TripPlannerScreen(
     uiState: VoltUiState,
-    onCalculateTrip: (String, String, Double, Double, Double, Double, Double) -> Unit,
+    onCalculateTrip: (String, String, Double, Double, Double, Double, Double, Double) -> Unit,
     onSelectStrategy: (String) -> Unit = {},
     onAcceptReroute: (String) -> Unit = {},
     onDismissReroute: () -> Unit = {},
     onTriggerSimulatedReroute: () -> Unit = {},
     onStartNavigation: () -> Unit = {},
     onStopNavigation: () -> Unit = {},
+    onLaunchGoogleMaps: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var originInput by remember { mutableStateOf(uiState.tripPlan.origin) }
@@ -103,31 +110,360 @@ fun TripPlannerScreen(
     var currentDestLat by remember { mutableStateOf(39.0968) }
     var currentDestLng by remember { mutableStateOf(-120.0324) }
 
+    // Battery percentage state — default from selected vehicle's SoC
+    var batteryPercent by remember { mutableFloatStateOf(uiState.selectedVehicle.currentSoC.toFloat()) }
+
+    // Track whether origin/destination have valid coordinates for preview markers
+    var hasOriginCoords by remember { mutableStateOf(false) }
+    var hasDestCoords by remember { mutableStateOf(false) }
+
     val presets = listOf(
+        RoutePreset("Bengaluru", "Mysuru", 143.5, 12.9716, 77.5946, 12.2958, 76.6394),
+        RoutePreset("Mumbai", "Pune", 152.0, 19.0760, 72.8777, 18.5204, 73.8567),
         RoutePreset("San Francisco", "Lake Tahoe", 315.0, 37.7749, -122.4194, 39.0968, -120.0324),
         RoutePreset("Los Angeles", "Las Vegas", 435.0, 34.0522, -118.2437, 36.1699, -115.1398),
-        RoutePreset("Oakland", "Palo Alto", 65.0, 37.8044, -122.2711, 37.4419, -122.1430),
         RoutePreset("San Jose", "Sacramento", 195.0, 37.3382, -121.8863, 38.5816, -121.4944)
     )
 
     val scrollState = rememberScrollState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(VoltDarkBg)
-            .verticalScroll(scrollState)
-            .padding(16.dp)
-    ) {
-        // Reroute Alert Banner (if active)
-        if (uiState.rerouteAlert != null) {
-            RerouteBanner(
-                alert = uiState.rerouteAlert,
-                onAccept = { onAcceptReroute(uiState.rerouteAlert.tripId) },
-                onDismiss = onDismissReroute
+    // ──────────────────────────────────────────────
+    // Prepare map data
+    // ──────────────────────────────────────────────
+    val geometry = uiState.tripPlan.geometry
+    val hasRoute = !geometry.isNullOrBlank()
+
+    val routePoints = if (hasRoute) {
+        remember(geometry) { PolylineDecoder.decode(geometry!!) }
+    } else {
+        emptyList()
+    }
+
+    // Route markers (after route is calculated)
+    val mapMarkers = if (hasRoute) {
+        remember(uiState.tripPlan.stops, uiState.stations, currentOriginLat, currentOriginLng, currentDestLat, currentDestLng) {
+            val markers = mutableListOf<RouteMarker>()
+            // Origin marker
+            markers.add(
+                RouteMarker(
+                    position = LatLng(currentOriginLat, currentOriginLng),
+                    title = uiState.tripPlan.origin.ifBlank { "Origin" },
+                    snippet = "Start • ${batteryPercent.toInt()}% SoC",
+                    type = MarkerType.ORIGIN
+                )
             )
-            Spacer(modifier = Modifier.height(14.dp))
+            // Live EV charging stations network
+            uiState.stations.forEach { station ->
+                if (station.latitude != null && station.longitude != null) {
+                    markers.add(
+                        RouteMarker(
+                            position = LatLng(station.latitude, station.longitude),
+                            title = "⚡ ${station.name}",
+                            snippet = "${station.powerKw}kW DC • ${station.availablePlugs}/${station.totalPlugs} Available",
+                            type = MarkerType.CHARGER
+                        )
+                    )
+                }
+            }
+            // Charging stop markers along route
+            uiState.tripPlan.stops
+                .filter { it.type == StopType.CHARGER_STOP }
+                .forEach { stop ->
+                    // Use the stop's own lat/lng if available, otherwise interpolate along route
+                    val position = if (stop.latitude != null && stop.longitude != null) {
+                        LatLng(stop.latitude, stop.longitude)
+                    } else {
+                        val fraction = if (uiState.tripPlan.distanceKm > 0) {
+                            (stop.distanceFromOriginKm / uiState.tripPlan.distanceKm).coerceIn(0.0, 1.0)
+                        } else 0.5
+                        val pointIndex = (fraction * (routePoints.size - 1)).toInt().coerceIn(0, routePoints.lastIndex)
+                        routePoints.getOrElse(pointIndex) { LatLng(currentOriginLat, currentOriginLng) }
+                    }
+                    markers.add(
+                        RouteMarker(
+                            position = position,
+                            title = "🛑 CHARGING STOP: ${stop.name}",
+                            snippet = "⚡ Charge ${stop.arrivalSoC.toInt()}% ➔ ${stop.departureSoC.toInt()}% (+${stop.chargeDurationMinutes}m)",
+                            type = MarkerType.WAYPOINT
+                        )
+                    )
+                }
+            // Destination marker
+            markers.add(
+                RouteMarker(
+                    position = LatLng(currentDestLat, currentDestLng),
+                    title = uiState.tripPlan.destination.ifBlank { "Destination" },
+                    snippet = "Arrive • ${uiState.tripPlan.arrivalSoC.toInt()}% SoC",
+                    type = MarkerType.DESTINATION
+                )
+            )
+            markers
         }
+    } else {
+        emptyList()
+    }
+
+    // Preview markers (before route is calculated — show origin/destination pins + live EV stations)
+    val previewMarkers = remember(hasOriginCoords, hasDestCoords, currentOriginLat, currentOriginLng, currentDestLat, currentDestLng, originInput, destinationInput, uiState.stations) {
+        val markers = mutableListOf<RouteMarker>()
+        // Live EV stations network
+        uiState.stations.forEach { station ->
+            if (station.latitude != null && station.longitude != null) {
+                markers.add(
+                    RouteMarker(
+                        position = LatLng(station.latitude, station.longitude),
+                        title = "⚡ ${station.name}",
+                        snippet = "${station.powerKw}kW DC • ${station.availablePlugs}/${station.totalPlugs} Available",
+                        type = MarkerType.CHARGER
+                    )
+                )
+            }
+        }
+        if (hasOriginCoords && originInput.isNotBlank()) {
+            markers.add(
+                RouteMarker(
+                    position = LatLng(currentOriginLat, currentOriginLng),
+                    title = originInput,
+                    snippet = "Starting Point",
+                    type = MarkerType.ORIGIN
+                )
+            )
+        }
+        if (hasDestCoords && destinationInput.isNotBlank()) {
+            markers.add(
+                RouteMarker(
+                    position = LatLng(currentDestLat, currentDestLng),
+                    title = destinationInput,
+                    snippet = "Destination",
+                    type = MarkerType.DESTINATION
+                )
+            )
+        }
+        markers
+    }
+
+    if (uiState.isNavigating) {
+        // ──────────────────────────────────────────────
+        // FULL-SCREEN IMMERSIVE EV NAVIGATION MODE
+        // ──────────────────────────────────────────────
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(VoltDarkBg)
+        ) {
+            // 1. Full-screen map
+            VoltMapView(
+                routePoints = routePoints,
+                markers = mapMarkers,
+                previewMarkers = previewMarkers,
+                userLocation = uiState.userLocation,
+                mapHeight = 0.dp,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // 2. Floating Top Maneuver & Navigation HUD Header
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, start = 14.dp, end = 14.dp)
+                    .align(Alignment.TopCenter),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = VoltDarkBg.copy(alpha = 0.94f)),
+                border = BorderStroke(1.5.dp, VoltEmerald)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(VoltEmerald)
+                            .padding(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Navigation,
+                            contentDescription = "Maneuver",
+                            tint = Color.Black,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "LIVE EV TURN-BY-TURN",
+                                color = VoltEmerald,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(VoltEmerald)
+                                    .size(6.dp)
+                            )
+                        }
+                        val nextChargerStop = uiState.tripPlan.stops.firstOrNull { it.type == StopType.CHARGER_STOP }
+                        Text(
+                            text = if (nextChargerStop != null) {
+                                "In 2.4 km ➔ Turn towards ${nextChargerStop.name}"
+                            } else {
+                                "Head East towards ${uiState.tripPlan.destination.ifBlank { "Destination" }}"
+                            },
+                            color = VoltTextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Speed: 74 km/h • Staying on optimized EV route",
+                            color = VoltTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(VoltCardElevated)
+                            .clickable { onStopNavigation() }
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Exit Navigation",
+                            tint = VoltTextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            // 3. Floating Bottom Telemetry & Navigation Controls Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp, start = 14.dp, end = 14.dp)
+                    .align(Alignment.BottomCenter),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = VoltDarkBg.copy(alpha = 0.94f)),
+                border = BorderStroke(1.dp, VoltCardBorder)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.BatteryChargingFull,
+                                contentDescription = "Battery",
+                                tint = VoltEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Battery: ${batteryPercent.toInt()}% SoC",
+                                color = VoltEmerald,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Est. Range: 168 km",
+                            color = VoltCyan,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val nextChargerStop = uiState.tripPlan.stops.firstOrNull { it.type == StopType.CHARGER_STOP }
+                    Text(
+                        text = if (nextChargerStop != null) {
+                            "Next Stop: ${nextChargerStop.name} (${nextChargerStop.distanceFromOriginKm.toInt()} km) • Charge +${nextChargerStop.chargeDurationMinutes}m to 80%"
+                        } else {
+                            "Direct EV Route • ${uiState.tripPlan.distanceKm.toInt()} km • ${uiState.tripPlan.durationMinutes} mins • Arrival SoC: ${uiState.tripPlan.arrivalSoC.toInt()}%"
+                        },
+                        color = VoltTextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onStopNavigation,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.2f)),
+                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 10.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Exit Nav",
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Exit Nav",
+                                color = Color(0xFFEF4444),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = onLaunchGoogleMaps,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = VoltEmerald),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 10.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Map,
+                                contentDescription = "Maps",
+                                tint = Color.Black,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Google Maps",
+                                color = Color.Black,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(VoltDarkBg)
+                .verticalScroll(scrollState)
+                .padding(16.dp)
+        ) {
+            // Reroute Alert Banner (if active)
+            if (uiState.rerouteAlert != null) {
+                RerouteBanner(
+                    alert = uiState.rerouteAlert,
+                    onAccept = { onAcceptReroute(uiState.rerouteAlert.tripId) },
+                    onDismiss = onDismissReroute
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+            }
 
         // Screen Header
         Text(
@@ -148,6 +484,256 @@ fun TripPlannerScreen(
             color = VoltTextSecondary,
             fontSize = 13.sp
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // ──────────────────────────────────────────────
+        // ALWAYS-VISIBLE GOOGLE MAP
+        // ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Map,
+                    contentDescription = "Map",
+                    tint = VoltCyan,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (hasRoute) "Route Visualization" else "Map Preview",
+                    color = VoltTextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Navigation controls (show after route is calculated or when navigating)
+            if (hasRoute || uiState.isNavigating) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // In-App Turn-by-Turn Navigation toggle
+                    Button(
+                        onClick = {
+                            if (uiState.isNavigating) onStopNavigation() else onStartNavigation()
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (uiState.isNavigating) VoltEmerald else VoltCyan.copy(alpha = 0.2f)
+                        ),
+                        border = BorderStroke(1.dp, if (uiState.isNavigating) VoltEmerald else VoltCyan),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isNavigating) Icons.Default.Navigation else Icons.Default.PlayArrow,
+                            contentDescription = "In-App Nav",
+                            tint = if (uiState.isNavigating) Color.Black else VoltCyan,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (uiState.isNavigating) "In-App Nav Active" else "In-App Nav",
+                            color = if (uiState.isNavigating) Color.Black else VoltCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // External Google Maps app launcher
+                    Button(
+                        onClick = onLaunchGoogleMaps,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = VoltDarkBg),
+                        border = BorderStroke(1.dp, VoltEmerald),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Map,
+                            contentDescription = "Google Maps App",
+                            tint = VoltEmerald,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Google Maps",
+                            color = VoltEmerald,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // In-App Navigation Turn Header (HUD) when navigating
+        if (uiState.isNavigating) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = VoltEmerald.copy(alpha = 0.15f)),
+                border = BorderStroke(1.5.dp, VoltEmerald)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(VoltEmerald)
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Navigation,
+                            contentDescription = "Maneuver",
+                            tint = Color.Black,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "IN-APP TURN-BY-TURN GUIDANCE",
+                            color = VoltEmerald,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        val nextChargerStop = uiState.tripPlan.stops.firstOrNull { it.type == StopType.CHARGER_STOP }
+                        Text(
+                            text = if (nextChargerStop != null) {
+                                "In 2.4 km ➔ Turn towards ${nextChargerStop.name}"
+                            } else {
+                                "Head East towards ${uiState.tripPlan.destination.ifBlank { "Destination" }}"
+                            },
+                            color = VoltTextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Live Speed: 74 km/h • Staying on EV route",
+                            color = VoltTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Google Maps — in-app interactive map with route & live markers
+        VoltMapView(
+            routePoints = routePoints,
+            markers = mapMarkers,
+            previewMarkers = previewMarkers,
+            userLocation = uiState.userLocation,
+            mapHeight = if (uiState.isNavigating) 360.dp else 300.dp
+        )
+
+        // Live EV Navigation Telemetry & Stop Guidance Banner
+        if (hasRoute || uiState.isNavigating) {
+            Spacer(modifier = Modifier.height(8.dp))
+            val nextChargerStop = uiState.tripPlan.stops.firstOrNull { it.type == StopType.CHARGER_STOP }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = VoltCardBg),
+                border = BorderStroke(1.dp, if (uiState.isNavigating) VoltEmerald else VoltCardBorder)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.BatteryChargingFull,
+                                contentDescription = "Battery",
+                                tint = VoltEmerald,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Battery: ${batteryPercent.toInt()}% SoC",
+                                color = VoltEmerald,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = if (uiState.isNavigating) "🟢 LIVE IN-APP NAV" else "⚡ OPTIMIZED ROUTE",
+                            color = if (uiState.isNavigating) VoltEmerald else VoltCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = if (nextChargerStop != null) {
+                            "Next Stop: ${nextChargerStop.name} (${nextChargerStop.distanceFromOriginKm.toInt()} km) • Charge +${nextChargerStop.chargeDurationMinutes} mins to reach 80%"
+                        } else {
+                            "Direct EV Route • ${uiState.tripPlan.distanceKm.toInt()} km • Est. ${uiState.tripPlan.durationMinutes} mins • Arrival Battery: ${uiState.tripPlan.arrivalSoC.toInt()}%"
+                        },
+                        color = VoltTextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // In-App Nav button
+                        Button(
+                            onClick = {
+                                if (uiState.isNavigating) onStopNavigation() else onStartNavigation()
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uiState.isNavigating) VoltAmber.copy(alpha = 0.2f) else VoltEmerald
+                            ),
+                            border = BorderStroke(1.dp, if (uiState.isNavigating) VoltAmber else VoltEmerald),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (uiState.isNavigating) "Stop In-App Nav" else "▶ Start In-App Nav",
+                                color = if (uiState.isNavigating) VoltAmber else Color.Black,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // External Google Maps App button
+                        Button(
+                            onClick = onLaunchGoogleMaps,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = VoltDarkBg),
+                            border = BorderStroke(1.dp, VoltCyan),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "Open Google Maps",
+                                color = VoltCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -170,6 +756,8 @@ fun TripPlannerScreen(
                         currentOriginLng = preset.originLng
                         currentDestLat = preset.destLat
                         currentDestLng = preset.destLng
+                        hasOriginCoords = true
+                        hasDestCoords = true
                         onCalculateTrip(
                             preset.origin,
                             preset.destination,
@@ -177,7 +765,8 @@ fun TripPlannerScreen(
                             preset.originLat,
                             preset.originLng,
                             preset.destLat,
-                            preset.destLng
+                            preset.destLng,
+                            batteryPercent.toDouble()
                         )
                     },
                     shape = RoundedCornerShape(10.dp),
@@ -197,7 +786,9 @@ fun TripPlannerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Input Form
+        // ──────────────────────────────────────────────
+        // INPUT FORM with Battery Percentage
+        // ──────────────────────────────────────────────
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -205,6 +796,110 @@ fun TripPlannerScreen(
             border = BorderStroke(1.dp, VoltCardBorder)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
+
+                // ── Battery Percentage Input ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.BatteryChargingFull,
+                        contentDescription = "Battery",
+                        tint = when {
+                            batteryPercent >= 60f -> VoltEmerald
+                            batteryPercent >= 30f -> VoltAmber
+                            else -> Color(0xFFEF4444)
+                        },
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Current Battery",
+                        color = VoltTextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    // Battery percentage badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                when {
+                                    batteryPercent >= 60f -> VoltEmerald.copy(alpha = 0.15f)
+                                    batteryPercent >= 30f -> VoltAmber.copy(alpha = 0.15f)
+                                    else -> Color(0xFFEF4444).copy(alpha = 0.15f)
+                                }
+                            )
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "${batteryPercent.toInt()}%",
+                            color = when {
+                                batteryPercent >= 60f -> VoltEmerald
+                                batteryPercent >= 30f -> VoltAmber
+                                else -> Color(0xFFEF4444)
+                            },
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Set your EV's current charge level before planning the route",
+                    color = VoltTextSecondary,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Slider(
+                    value = batteryPercent,
+                    onValueChange = { batteryPercent = it },
+                    valueRange = 1f..100f,
+                    steps = 0,
+                    colors = SliderDefaults.colors(
+                        thumbColor = when {
+                            batteryPercent >= 60f -> VoltEmerald
+                            batteryPercent >= 30f -> VoltAmber
+                            else -> Color(0xFFEF4444)
+                        },
+                        activeTrackColor = when {
+                            batteryPercent >= 60f -> VoltEmerald
+                            batteryPercent >= 30f -> VoltAmber
+                            else -> Color(0xFFEF4444)
+                        },
+                        inactiveTrackColor = VoltCardBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                // Quick battery presets
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    listOf(20, 40, 60, 80, 100).forEach { preset ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    if (batteryPercent.toInt() == preset) VoltCyan.copy(alpha = 0.2f)
+                                    else VoltCardElevated
+                                )
+                                .clickable { batteryPercent = preset.toFloat() }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "$preset%",
+                                color = if (batteryPercent.toInt() == preset) VoltCyan else VoltTextSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 // Starting Location with Recommendations & GPS Current Location
                 LocationInputField(
                     label = "Starting Location",
@@ -213,7 +908,8 @@ fun TripPlannerScreen(
                     onLocationSelected = { suggestion ->
                         currentOriginLat = suggestion.latitude
                         currentOriginLng = suggestion.longitude
-                        if (destinationInput.isNotBlank() && currentDestLat != 0.0) {
+                        hasOriginCoords = true
+                        if (destinationInput.isNotBlank() && hasDestCoords) {
                             val autoDist = LocationSearchService.calculateDistanceKm(
                                 currentOriginLat, currentOriginLng,
                                 currentDestLat, currentDestLng
@@ -227,7 +923,8 @@ fun TripPlannerScreen(
                     onCurrentLocationAcquired = { lat, lng, name ->
                         currentOriginLat = lat
                         currentOriginLng = lng
-                        if (destinationInput.isNotBlank() && currentDestLat != 0.0) {
+                        hasOriginCoords = true
+                        if (destinationInput.isNotBlank() && hasDestCoords) {
                             val autoDist = LocationSearchService.calculateDistanceKm(
                                 currentOriginLat, currentOriginLng,
                                 currentDestLat, currentDestLng
@@ -247,7 +944,8 @@ fun TripPlannerScreen(
                     onLocationSelected = { suggestion ->
                         currentDestLat = suggestion.latitude
                         currentDestLng = suggestion.longitude
-                        if (originInput.isNotBlank() && currentOriginLat != 0.0) {
+                        hasDestCoords = true
+                        if (originInput.isNotBlank() && hasOriginCoords) {
                             val autoDist = LocationSearchService.calculateDistanceKm(
                                 currentOriginLat, currentOriginLng,
                                 currentDestLat, currentDestLng
@@ -280,16 +978,50 @@ fun TripPlannerScreen(
 
                 Button(
                     onClick = {
-                        val dist = distanceInput.toDoubleOrNull() ?: 200.0
+                        var oLat = currentOriginLat
+                        var oLng = currentOriginLng
+                        var dLat = currentDestLat
+                        var dLng = currentDestLng
+
+                        // Match typed origin location with local suggestion if coordinates not set
+                        val originMatch = LocationSearchService.findLocalSuggestion(originInput)
+                        if (originMatch != null) {
+                            oLat = originMatch.latitude
+                            oLng = originMatch.longitude
+                            currentOriginLat = oLat
+                            currentOriginLng = oLng
+                            hasOriginCoords = true
+                        }
+
+                        // Match typed destination location with local suggestion if coordinates not set
+                        val destMatch = LocationSearchService.findLocalSuggestion(destinationInput)
+                        if (destMatch != null) {
+                            dLat = destMatch.latitude
+                            dLng = destMatch.longitude
+                            currentDestLat = dLat
+                            currentDestLng = dLng
+                            hasDestCoords = true
+                        }
+
+                        val calculatedDist = if (hasOriginCoords && hasDestCoords) {
+                            LocationSearchService.calculateDistanceKm(oLat, oLng, dLat, dLng)
+                        } else {
+                            distanceInput.toDoubleOrNull() ?: 200.0
+                        }
+                        distanceInput = calculatedDist.toString()
+
                         onCalculateTrip(
                             originInput,
                             destinationInput,
-                            dist,
-                            currentOriginLat,
-                            currentOriginLng,
-                            currentDestLat,
-                            currentDestLng
+                            calculatedDist,
+                            oLat,
+                            oLng,
+                            dLat,
+                            dLng,
+                            batteryPercent.toDouble()
                         )
+                        // Automatically start navigation so journey starts on the map immediately
+                        onStartNavigation()
                     },
                     enabled = !uiState.isLoading,
                     modifier = Modifier.fillMaxWidth(),
@@ -329,115 +1061,6 @@ fun TripPlannerScreen(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-
-        // ──────────────────────────────────────────────
-        // Interactive Route Map (Google Maps)
-        // ──────────────────────────────────────────────
-        val geometry = uiState.tripPlan.geometry
-        if (!geometry.isNullOrBlank()) {
-            val routePoints = remember(geometry) {
-                PolylineDecoder.decode(geometry)
-            }
-
-            // Build markers from trip plan stops
-            val mapMarkers = remember(uiState.tripPlan.stops, currentOriginLat, currentOriginLng, currentDestLat, currentDestLng) {
-                val markers = mutableListOf<RouteMarker>()
-                // Origin marker
-                markers.add(
-                    RouteMarker(
-                        position = LatLng(currentOriginLat, currentOriginLng),
-                        title = uiState.tripPlan.origin.ifBlank { "Origin" },
-                        snippet = "Start • ${uiState.tripPlan.stops.firstOrNull()?.arrivalSoC?.toInt() ?: 80}% SoC",
-                        type = MarkerType.ORIGIN
-                    )
-                )
-                // Charging stop markers (use interpolated positions along route)
-                uiState.tripPlan.stops
-                    .filter { it.type == StopType.CHARGER_STOP }
-                    .forEach { stop ->
-                        val fraction = if (uiState.tripPlan.distanceKm > 0) {
-                            (stop.distanceFromOriginKm / uiState.tripPlan.distanceKm).coerceIn(0.0, 1.0)
-                        } else 0.5
-                        val pointIndex = (fraction * (routePoints.size - 1)).toInt().coerceIn(0, routePoints.lastIndex)
-                        markers.add(
-                            RouteMarker(
-                                position = routePoints.getOrElse(pointIndex) { LatLng(currentOriginLat, currentOriginLng) },
-                                title = stop.name,
-                                snippet = "⚡ ${stop.arrivalSoC.toInt()}% → ${stop.departureSoC.toInt()}% (+${stop.chargeDurationMinutes}m)",
-                                type = MarkerType.CHARGER
-                            )
-                        )
-                    }
-                // Destination marker
-                markers.add(
-                    RouteMarker(
-                        position = LatLng(currentDestLat, currentDestLng),
-                        title = uiState.tripPlan.destination.ifBlank { "Destination" },
-                        snippet = "Arrive • ${uiState.tripPlan.arrivalSoC.toInt()}% SoC",
-                        type = MarkerType.DESTINATION
-                    )
-                )
-                markers
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Map,
-                        contentDescription = "Map",
-                        tint = VoltCyan,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Route Visualization",
-                        color = VoltTextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        if (uiState.isNavigating) onStopNavigation() else onStartNavigation()
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (uiState.isNavigating) VoltAmber.copy(alpha = 0.2f) else VoltCyan.copy(alpha = 0.2f)
-                    ),
-                    border = BorderStroke(1.dp, if (uiState.isNavigating) VoltAmber else VoltCyan),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = if (uiState.isNavigating) Icons.Default.Warning else Icons.Default.Navigation,
-                        contentDescription = "Nav",
-                        tint = if (uiState.isNavigating) VoltAmber else VoltCyan,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (uiState.isNavigating) "Stop GPS Tracking" else "Start Live GPS",
-                        color = if (uiState.isNavigating) VoltAmber else VoltCyan,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-
-            VoltMapView(
-                routePoints = routePoints,
-                markers = mapMarkers,
-                userLocation = uiState.userLocation,
-                mapHeight = 280.dp
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-        }
 
         // ──────────────────────────────────────────────
         // Multi-Strategy Ranked Comparison (Phase 4)
@@ -643,6 +1266,7 @@ fun TripPlannerScreen(
 
         Spacer(modifier = Modifier.height(60.dp))
     }
+}
 }
 
 @Composable

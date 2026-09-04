@@ -100,14 +100,13 @@ fun AuthScreen(
     onSignUp: (name: String, email: String, password: String, vehicleId: String) -> Unit,
     onGoogleSignInSuccess: (name: String, email: String, idToken: String?) -> Unit,
     onGoogleSignInError: (error: String) -> Unit,
-    onGuestSignIn: () -> Unit,
     onClearError: () -> Unit
 ) {
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(AuthTab.SIGN_IN) }
     var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("driver@volt.app") }
-    var password by remember { mutableStateOf("volt2026") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var selectedVehicleId by remember { mutableStateOf(vehicles.firstOrNull()?.id ?: "v1") }
 
@@ -664,39 +663,6 @@ fun AuthScreen(
                         color = VoltTextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Guest / Sandbox Demo Mode Button
-            OutlinedButton(
-                onClick = onGuestSignIn,
-                enabled = !isLoading,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, VoltEmerald.copy(alpha = 0.6f)),
-                colors = ButtonDefaults.outlinedButtonColors(containerColor = VoltEmerald.copy(alpha = 0.08f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Guest",
-                        tint = VoltEmerald,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Explore Live Sandbox (Demo Pilot)",
-                        color = VoltEmerald,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
                     )
                 }
             }

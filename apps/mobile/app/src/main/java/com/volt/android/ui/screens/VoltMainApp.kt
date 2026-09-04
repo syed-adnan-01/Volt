@@ -80,9 +80,6 @@ fun VoltMainApp(
             onGoogleSignInError = { error ->
                 viewModel.onGoogleSignInError(error)
             },
-            onGuestSignIn = {
-                viewModel.loginAsGuest()
-            },
             onClearError = {
                 viewModel.clearAuthError()
             }
@@ -211,15 +208,16 @@ fun VoltMainApp(
                 )
                 VoltNavTab.TRIP_PLANNER -> TripPlannerScreen(
                     uiState = uiState,
-                    onCalculateTrip = { origin, dest, dist, oLat, oLng, dLat, dLng ->
-                        viewModel.planTrip(origin, dest, dist, oLat, oLng, dLat, dLng)
+                    onCalculateTrip = { origin, dest, dist, oLat, oLng, dLat, dLng, batteryPct ->
+                        viewModel.planTrip(origin, dest, dist, oLat, oLng, dLat, dLng, batteryPct)
                     },
                     onSelectStrategy = { viewModel.selectStrategy(it) },
                     onAcceptReroute = { viewModel.acceptReroute(it) },
                     onDismissReroute = { viewModel.dismissRerouteAlert() },
                     onTriggerSimulatedReroute = { viewModel.triggerSimulatedReroute() },
                     onStartNavigation = { viewModel.startTripNavigation(locationTracker) },
-                    onStopNavigation = { viewModel.stopTripNavigation() }
+                    onStopNavigation = { viewModel.stopTripNavigation() },
+                    onLaunchGoogleMaps = { viewModel.launchGoogleMapsNavigation(context) }
                 )
                 VoltNavTab.CHARGERS -> ChargingScreen(
                     uiState = uiState,

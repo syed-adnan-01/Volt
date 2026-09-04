@@ -119,7 +119,7 @@ async function runMultiStopDemo() {
 async function main() {
   await runMultiStopDemo();
 
-  const PORT = Number(process.env["PORT"]) || 3000;
+  const PORT = Number(process.env["ROUTING_SERVICE_PORT"] || process.env["ROUTING_PORT"]) || (process.env["PORT"] && process.env["PORT"] !== "3000" ? Number(process.env["PORT"]) : 3001);
   startServer(PORT);
 }
 

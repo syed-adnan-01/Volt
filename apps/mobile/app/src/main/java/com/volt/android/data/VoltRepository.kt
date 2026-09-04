@@ -1,5 +1,6 @@
 package com.volt.android.data
 
+import com.volt.android.BuildConfig
 import com.volt.android.data.models.BatteryResult
 import com.volt.android.data.models.BatteryTelemetry
 import com.volt.android.data.models.ChargingStation
@@ -122,6 +123,7 @@ class VoltRepository {
         originLng: Double = -122.4194,
         destLat: Double = 39.0968,
         destLng: Double = -120.0324,
+        batteryPercent: Double = 80.0,
         vehicleId: String? = null
     ) {
         _isLoading.value = true
@@ -133,7 +135,7 @@ class VoltRepository {
                 val targetVehicleId = vehicleId ?: currentVehicle.id
                 val request = TripPlanRequest(
                     vehicleId = targetVehicleId,
-                    currentSoc = currentVehicle.currentSoC,
+                    currentSoc = batteryPercent,
                     originLat = originLat,
                     originLng = originLng,
                     destLat = destLat,
@@ -298,13 +300,65 @@ class VoltRepository {
                 } else {
                     val fallbackPlan = calculateTrip(origin, destination, distanceKm, currentVehicle)
                     _activeTripPlan.value = fallbackPlan
-                    _routeStrategies.value = emptyList()
+                    _routeStrategies.value = listOf(
+                        RouteStrategy(
+                            id = "RECOMMENDED",
+                            title = "Estimated Route (Direct)",
+                            tag = "⚡ DIRECT ROUTE",
+                            totalTimeMinutes = fallbackPlan.durationMinutes,
+                            driveTimeMinutes = fallbackPlan.durationMinutes,
+                            chargeTimeMinutes = fallbackPlan.totalChargingTimeMinutes,
+                            arrivalSoC = fallbackPlan.arrivalSoC,
+                            energyKWh = fallbackPlan.energyRequiredKWh,
+                            whyExplanation = fallbackPlan.recommendations.firstOrNull() ?: "Route calculated based on vehicle battery capacity.",
+                            plan = fallbackPlan
+                        )
+                    )
+                    _selectedStrategyId.value = "RECOMMENDED"
                 }
             } catch (e: Exception) {
                 _networkError.value = e.message
-                val fallbackPlan = calculateTrip(origin, destination, distanceKm, _selectedVehicle.value)
+                // Fetch real Google Directions route geometry for offline mode
+                val directionsResult = try {
+                    GoogleDirectionsClient.fetchRoute(
+                        originLat, originLng, destLat, destLng,
+                        BuildConfig.MAPS_API_KEY
+                    )
+                } catch (_: Exception) { null }
+
+                val geometry = directionsResult?.encodedPolyline
+                    ?: GoogleDirectionsClient.generateFallbackPolyline(
+                        originLat, originLng, destLat, destLng
+                    )
+                val actualDistanceKm = if (directionsResult != null) {
+                    directionsResult.distanceMeters / 1000.0
+                } else distanceKm
+                val actualDurationMins = if (directionsResult != null) {
+                    directionsResult.durationSeconds / 60
+                } else ((distanceKm / 85.0) * 60.0).roundToInt()
+
+                val fallbackPlan = calculateTrip(
+                    origin, destination, actualDistanceKm,
+                    _selectedVehicle.value, batteryPercent,
+                    originLat, originLng, destLat, destLng,
+                    geometry, actualDurationMins
+                )
                 _activeTripPlan.value = fallbackPlan
-                _routeStrategies.value = emptyList()
+                _routeStrategies.value = listOf(
+                    RouteStrategy(
+                        id = "RECOMMENDED",
+                        title = "EV Optimized Route",
+                        tag = "⚡ EV ROUTE",
+                        totalTimeMinutes = fallbackPlan.durationMinutes + fallbackPlan.totalChargingTimeMinutes,
+                        driveTimeMinutes = fallbackPlan.durationMinutes,
+                        chargeTimeMinutes = fallbackPlan.totalChargingTimeMinutes,
+                        arrivalSoC = fallbackPlan.arrivalSoC,
+                        energyKWh = fallbackPlan.energyRequiredKWh,
+                        whyExplanation = fallbackPlan.recommendations.firstOrNull() ?: "Route calculated with EV charging optimization.",
+                        plan = fallbackPlan
+                    )
+                )
+                _selectedStrategyId.value = "RECOMMENDED"
             } finally {
                 _isLoading.value = false
             }
@@ -578,14 +632,21 @@ class VoltRepository {
         origin: String,
         destination: String,
         distanceKm: Double,
-        vehicle: VehicleProfile = _selectedVehicle.value
+        vehicle: VehicleProfile = _selectedVehicle.value,
+        batteryPercent: Double = _telemetry.value.socPercent,
+        originLat: Double = 0.0,
+        originLng: Double = 0.0,
+        destLat: Double = 0.0,
+        destLng: Double = 0.0,
+        geometry: String? = null,
+        durationMinutesOverride: Int? = null
     ): TripPlanResult {
         val consumptionRate = vehicle.baseConsumptionWhKm * (if (_telemetry.value.isRangeMode) 0.9 else 1.0)
         val totalEnergyRequiredKWh = (distanceKm * consumptionRate) / 1000.0
-        val currentSoC = _telemetry.value.socPercent
+        val currentSoC = batteryPercent
         val startingEnergyKWh = (currentSoC / 100.0) * vehicle.batteryCapacityKWh
         
-        val drivingTimeMins = ((distanceKm / 85.0) * 60.0).roundToInt()
+        val drivingTimeMins = durationMinutesOverride ?: ((distanceKm / 85.0) * 60.0).roundToInt()
         
         val isDirectReachable = startingEnergyKWh >= (totalEnergyRequiredKWh + (vehicle.batteryCapacityKWh * (vehicle.reserveSocPercent / 100.0)))
         
@@ -596,14 +657,19 @@ class VoltRepository {
             val riskScore = max(0.05, min(1.0, 1.0 - (arrivalSoC / 100.0)))
             
             val stops = listOf(
-                RouteStop(origin, StopType.ORIGIN, 0.0, currentSoC, currentSoC),
-                RouteStop(destination, StopType.DESTINATION, distanceKm, arrivalSoC, arrivalSoC)
+                RouteStop(origin, StopType.ORIGIN, 0.0, currentSoC, currentSoC,
+                    latitude = if (originLat != 0.0) originLat else null,
+                    longitude = if (originLng != 0.0) originLng else null),
+                RouteStop(destination, StopType.DESTINATION, distanceKm, arrivalSoC, arrivalSoC,
+                    latitude = if (destLat != 0.0) destLat else null,
+                    longitude = if (destLng != 0.0) destLng else null)
             )
             
             val recommendations = mutableListOf<String>().apply {
-                add("Direct route feasible without intermediate charging stops.")
-                if (arrivalSoC < 20.0) add("Arrival battery is under 20%. Consider destination charging upon arrival.")
-                else add("Safe arrival buffer of ${(safetyMargin).roundToInt()}% above reserve threshold.")
+                add("Direct route feasible — no charging stops needed.")
+                if (arrivalSoC < 20.0) add("⚠️ Arrival battery is under 20%. Consider destination charging.")
+                else add("✅ Safe arrival buffer of ${(safetyMargin).roundToInt()}% above reserve.")
+                add("Battery: ${currentSoC.roundToInt()}% → ${arrivalSoC.roundToInt()}% (${totalEnergyRequiredKWh.roundToInt()} kWh consumed)")
             }
             
             val batteryResult = BatteryResult(
@@ -622,7 +688,7 @@ class VoltRepository {
             )
 
             return TripPlanResult(
-                tripId = "sim-trip-1",
+                tripId = "ev-trip-${System.currentTimeMillis()}",
                 origin = origin,
                 destination = destination,
                 distanceKm = distanceKm,
@@ -633,14 +699,16 @@ class VoltRepository {
                 isFeasible = true,
                 safetyMarginPercent = (safetyMargin * 10.0).roundToInt() / 10.0,
                 riskScore = (riskScore * 100.0).roundToInt() / 100.0,
-                geometry = null,
+                geometry = geometry,
                 battery = batteryResult,
                 stops = stops,
                 optimizerData = optimizerData,
                 recommendations = recommendations
             )
         } else {
-            val stopDistanceKm = distanceKm * 0.55
+            // Calculate optimal charging stop position along the route
+            val stopFraction = 0.55
+            val stopDistanceKm = distanceKm * stopFraction
             val leg1Energy = (stopDistanceKm * consumptionRate) / 1000.0
             val chargerArrivalSoC = max(8.0, ((startingEnergyKWh - leg1Energy) / vehicle.batteryCapacityKWh) * 100.0)
             
@@ -652,9 +720,19 @@ class VoltRepository {
             val leg2Energy = (leg2DistanceKm * consumptionRate) / 1000.0
             val leg2StartingEnergy = (targetSoC / 100.0) * vehicle.batteryCapacityKWh
             val arrivalSoC = ((leg2StartingEnergy - leg2Energy) / vehicle.batteryCapacityKWh) * 100.0
+
+            // Place the EV station at the interpolated point along the route
+            val stationLat = if (originLat != 0.0 && destLat != 0.0) {
+                originLat + (destLat - originLat) * stopFraction
+            } else null
+            val stationLng = if (originLng != 0.0 && destLng != 0.0) {
+                originLng + (destLng - originLng) * stopFraction
+            } else null
             
             val stops = listOf(
-                RouteStop(origin, StopType.ORIGIN, 0.0, currentSoC, currentSoC),
+                RouteStop(origin, StopType.ORIGIN, 0.0, currentSoC, currentSoC,
+                    latitude = if (originLat != 0.0) originLat else null,
+                    longitude = if (originLng != 0.0) originLng else null),
                 RouteStop(
                     name = "VOLT SuperHub — Fast DC 250kW",
                     type = StopType.CHARGER_STOP,
@@ -662,15 +740,22 @@ class VoltRepository {
                     arrivalSoC = (chargerArrivalSoC * 10.0).roundToInt() / 10.0,
                     departureSoC = targetSoC,
                     chargeDurationMinutes = chargingTimeMins,
-                    energyAddedKWh = (energyToAddKWh * 10.0).roundToInt() / 10.0
+                    energyAddedKWh = (energyToAddKWh * 10.0).roundToInt() / 10.0,
+                    latitude = stationLat,
+                    longitude = stationLng
                 ),
-                RouteStop(destination, StopType.DESTINATION, distanceKm, (arrivalSoC * 10.0).roundToInt() / 10.0, (arrivalSoC * 10.0).roundToInt() / 10.0)
+                RouteStop(destination, StopType.DESTINATION, distanceKm,
+                    (arrivalSoC * 10.0).roundToInt() / 10.0,
+                    (arrivalSoC * 10.0).roundToInt() / 10.0,
+                    latitude = if (destLat != 0.0) destLat else null,
+                    longitude = if (destLng != 0.0) destLng else null)
             )
             
             val recommendations = listOf(
-                "Route optimized with 1 high-speed DC charging stop ($chargingTimeMins min).",
-                "Charges vehicle to 80% to maintain fastest charging curve segment.",
-                "Arrival battery at destination estimated at ${(arrivalSoC).roundToInt()}%."
+                "🔌 Route optimized with 1 high-speed DC charging stop ($chargingTimeMins min).",
+                "⚡ Charges to 80% SoC for optimal fast-charging efficiency.",
+                "🔋 Battery: ${currentSoC.roundToInt()}% → ${chargerArrivalSoC.roundToInt()}% → 80% → ${arrivalSoC.roundToInt()}% at arrival.",
+                "📍 Estimated distance: ${distanceKm.roundToInt()} km • Drive time: ${drivingTimeMins} min"
             )
 
             val batteryResult = BatteryResult(
@@ -689,7 +774,7 @@ class VoltRepository {
             )
             
             return TripPlanResult(
-                tripId = "sim-trip-2",
+                tripId = "ev-trip-${System.currentTimeMillis()}",
                 origin = origin,
                 destination = destination,
                 distanceKm = distanceKm,
@@ -700,7 +785,7 @@ class VoltRepository {
                 isFeasible = true,
                 safetyMarginPercent = ((arrivalSoC - vehicle.reserveSocPercent) * 10.0).roundToInt() / 10.0,
                 riskScore = 0.22,
-                geometry = null,
+                geometry = geometry,
                 battery = batteryResult,
                 stops = stops,
                 optimizerData = optimizerData,

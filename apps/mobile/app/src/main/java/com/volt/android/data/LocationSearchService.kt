@@ -36,6 +36,14 @@ object LocationSearchService {
 
     // Curated high-frequency EV corridor hubs and major locations for instantaneous offline suggestions
     private val POPULAR_LOCATIONS = listOf(
+        PlaceSuggestion("Bengaluru", "Karnataka, India", 12.9716, 77.5946),
+        PlaceSuggestion("Mysuru", "Karnataka, India", 12.2958, 76.6394),
+        PlaceSuggestion("Mumbai", "Maharashtra, India", 19.0760, 72.8777),
+        PlaceSuggestion("Pune", "Maharashtra, India", 18.5204, 73.8567),
+        PlaceSuggestion("Delhi", "Delhi, India", 28.7041, 77.1025),
+        PlaceSuggestion("Jaipur", "Rajasthan, India", 26.9124, 75.7873),
+        PlaceSuggestion("Chennai", "Tamil Nadu, India", 13.0827, 80.2707),
+        PlaceSuggestion("Hyderabad", "Telangana, India", 17.3850, 78.4867),
         PlaceSuggestion("San Francisco", "California, USA", 37.7749, -122.4194),
         PlaceSuggestion("Lake Tahoe", "Nevada / California, USA", 39.0968, -120.0324),
         PlaceSuggestion("Los Angeles", "California, USA", 34.0522, -118.2437),
@@ -44,27 +52,22 @@ object LocationSearchService {
         PlaceSuggestion("Sacramento", "California, USA", 38.5816, -121.4944),
         PlaceSuggestion("Oakland", "California, USA", 37.8044, -122.2711),
         PlaceSuggestion("Palo Alto", "California, USA", 37.4419, -122.1430),
-        PlaceSuggestion("San Diego", "California, USA", 32.7157, -117.1611),
-        PlaceSuggestion("Santa Barbara", "California, USA", 34.4208, -119.6982),
-        PlaceSuggestion("Monterey", "California, USA", 36.6002, -121.8947),
-        PlaceSuggestion("Yosemite National Park", "California, USA", 37.8651, -119.5383),
-        PlaceSuggestion("Palm Springs", "California, USA", 33.8303, -116.5453),
-        PlaceSuggestion("Fresno", "California, USA", 36.7468, -119.7726),
         PlaceSuggestion("Seattle", "Washington, USA", 47.6062, -122.3321),
-        PlaceSuggestion("Portland", "Oregon, USA", 45.5152, -122.6784),
-        PlaceSuggestion("Phoenix", "Arizona, USA", 33.4484, -112.0740),
-        PlaceSuggestion("Tucson", "Arizona, USA", 32.2226, -110.9747),
-        PlaceSuggestion("Salt Lake City", "Utah, USA", 40.7608, -111.8910),
-        PlaceSuggestion("Denver", "Colorado, USA", 39.7392, -104.9903),
-        PlaceSuggestion("Austin", "Texas, USA", 30.2672, -97.7431),
-        PlaceSuggestion("Dallas", "Texas, USA", 32.7767, -96.7970),
-        PlaceSuggestion("Houston", "Texas, USA", 29.7604, -95.3698),
-        PlaceSuggestion("Chicago", "Illinois, USA", 41.8781, -87.6298),
-        PlaceSuggestion("New York", "New York, USA", 40.7128, -74.0060),
-        PlaceSuggestion("Boston", "Massachusetts, USA", 42.3601, -71.0589),
-        PlaceSuggestion("Miami", "Florida, USA", 25.7617, -80.1918),
-        PlaceSuggestion("Atlanta", "Georgia, USA", 33.7490, -84.3880)
+        PlaceSuggestion("New York", "New York, USA", 40.7128, -74.0060)
     )
+
+    /**
+     * Synchronously finds a local matching suggestion from curated locations by name.
+     */
+    fun findLocalSuggestion(query: String): PlaceSuggestion? {
+        val trimmed = query.trim()
+        if (trimmed.length < 2) return null
+        return POPULAR_LOCATIONS.find {
+            it.name.equals(trimmed, ignoreCase = true) ||
+            it.fullDisplayName.contains(trimmed, ignoreCase = true) ||
+            trimmed.contains(it.name, ignoreCase = true)
+        }
+    }
 
     /**
      * Searches for location recommendations matching the user's typed query.
