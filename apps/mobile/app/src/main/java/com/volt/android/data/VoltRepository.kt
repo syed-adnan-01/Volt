@@ -1,5 +1,6 @@
 package com.volt.android.data
 
+import com.google.android.gms.maps.model.LatLng
 import com.volt.android.BuildConfig
 import com.volt.android.data.models.BatteryResult
 import com.volt.android.data.models.BatteryTelemetry
@@ -131,6 +132,23 @@ class VoltRepository {
 
         withContext(Dispatchers.IO) {
             val currentVehicle = _selectedVehicle.value
+
+            // 1. Dynamically fetch real operational EV charging stations along the route corridor
+            if (originLat != 0.0 && destLat != 0.0) {
+                try {
+                    val corridorStations = OpenChargeMapClient.fetchCorridorStations(originLat, originLng, destLat, destLng)
+                    if (corridorStations.isNotEmpty()) {
+                        val existingIds = _stations.value.map { it.id }.toSet()
+                        val newStations = corridorStations.filter { it.id !in existingIds }
+                        if (newStations.isNotEmpty()) {
+                            _stations.value = _stations.value + newStations
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("VoltRepository", "Corridor station fetch error: ${e.message}")
+                }
+            }
+
             try {
                 val targetVehicleId = vehicleId ?: currentVehicle.id
                 val request = TripPlanRequest(
@@ -298,19 +316,44 @@ class VoltRepository {
                         _selectedStrategyId.value = backendStrategies[0].id
                     }
                 } else {
-                    val fallbackPlan = calculateTrip(origin, destination, distanceKm, currentVehicle)
+                    // Fallback when backend is not responding or on physical device.
+                    // Fetch OSRM route for the direct O->D corridor only (no synthetic midpoint waypoints
+                    // which can be off-road and cause all OSRM candidates to fail).
+                    val directionsResult = try {
+                        GoogleDirectionsClient.fetchRoute(
+                            originLat, originLng, destLat, destLng,
+                            BuildConfig.MAPS_API_KEY,
+                            emptyList() // Direct corridor only — charger stops spliced by PolylineDecoder in UI
+                        )
+                    } catch (_: Exception) { null }
+
+                    android.util.Log.d("VoltRepository", "OSRM direct route: ${if (directionsResult != null) "OK ${directionsResult.encodedPolyline.length} chars" else "FAILED"}")
+
+                    val actualDistKm = if (directionsResult != null && directionsResult.distanceMeters > 0) {
+                        directionsResult.distanceMeters / 1000.0
+                    } else distanceKm
+                    val actualDurationMins = if (directionsResult != null && directionsResult.durationSeconds > 0) {
+                        directionsResult.durationSeconds / 60
+                    } else ((distanceKm / 85.0) * 60.0).roundToInt()
+
+                    val fallbackPlan = calculateTrip(
+                        origin, destination, actualDistKm, currentVehicle,
+                        batteryPercent, originLat, originLng, destLat, destLng,
+                        directionsResult?.encodedPolyline, actualDurationMins
+                    )
+
                     _activeTripPlan.value = fallbackPlan
                     _routeStrategies.value = listOf(
                         RouteStrategy(
                             id = "RECOMMENDED",
-                            title = "Estimated Route (Direct)",
-                            tag = "⚡ DIRECT ROUTE",
-                            totalTimeMinutes = fallbackPlan.durationMinutes,
+                            title = if (fallbackPlan.totalChargingTimeMinutes > 0) "EV Optimized Route" else "Direct Route",
+                            tag = if (fallbackPlan.totalChargingTimeMinutes > 0) "⚡ EV ROUTE" else "⚡ DIRECT ROUTE",
+                            totalTimeMinutes = fallbackPlan.durationMinutes + fallbackPlan.totalChargingTimeMinutes,
                             driveTimeMinutes = fallbackPlan.durationMinutes,
                             chargeTimeMinutes = fallbackPlan.totalChargingTimeMinutes,
                             arrivalSoC = fallbackPlan.arrivalSoC,
                             energyKWh = fallbackPlan.energyRequiredKWh,
-                            whyExplanation = fallbackPlan.recommendations.firstOrNull() ?: "Route calculated based on vehicle battery capacity.",
+                            whyExplanation = fallbackPlan.recommendations.firstOrNull() ?: "Route calculated with EV charging optimization.",
                             plan = fallbackPlan
                         )
                     )
@@ -318,22 +361,21 @@ class VoltRepository {
                 }
             } catch (e: Exception) {
                 _networkError.value = e.message
-                // Fetch real Google Directions route geometry for offline mode
+                // Direct corridor route — no synthetic waypoints
                 val directionsResult = try {
                     GoogleDirectionsClient.fetchRoute(
                         originLat, originLng, destLat, destLng,
-                        BuildConfig.MAPS_API_KEY
+                        BuildConfig.MAPS_API_KEY,
+                        emptyList()
                     )
                 } catch (_: Exception) { null }
 
-                val geometry = directionsResult?.encodedPolyline
-                    ?: GoogleDirectionsClient.generateFallbackPolyline(
-                        originLat, originLng, destLat, destLng
-                    )
-                val actualDistanceKm = if (directionsResult != null) {
+                android.util.Log.d("VoltRepository", "OSRM exception-path route: ${if (directionsResult != null) "OK ${directionsResult.encodedPolyline.length} chars" else "FAILED"}")
+
+                val actualDistanceKm = if (directionsResult != null && directionsResult.distanceMeters > 0) {
                     directionsResult.distanceMeters / 1000.0
                 } else distanceKm
-                val actualDurationMins = if (directionsResult != null) {
+                val actualDurationMins = if (directionsResult != null && directionsResult.durationSeconds > 0) {
                     directionsResult.durationSeconds / 60
                 } else ((distanceKm / 85.0) * 60.0).roundToInt()
 
@@ -341,14 +383,14 @@ class VoltRepository {
                     origin, destination, actualDistanceKm,
                     _selectedVehicle.value, batteryPercent,
                     originLat, originLng, destLat, destLng,
-                    geometry, actualDurationMins
+                    directionsResult?.encodedPolyline, actualDurationMins
                 )
                 _activeTripPlan.value = fallbackPlan
                 _routeStrategies.value = listOf(
                     RouteStrategy(
                         id = "RECOMMENDED",
-                        title = "EV Optimized Route",
-                        tag = "⚡ EV ROUTE",
+                        title = if (fallbackPlan.totalChargingTimeMinutes > 0) "EV Optimized Route" else "Direct Route",
+                        tag = if (fallbackPlan.totalChargingTimeMinutes > 0) "⚡ EV ROUTE" else "⚡ DIRECT ROUTE",
                         totalTimeMinutes = fallbackPlan.durationMinutes + fallbackPlan.totalChargingTimeMinutes,
                         driveTimeMinutes = fallbackPlan.durationMinutes,
                         chargeTimeMinutes = fallbackPlan.totalChargingTimeMinutes,
@@ -471,10 +513,23 @@ class VoltRepository {
                             )
                         }
                         _stations.value = liveStations
+                        return@withContext
                     }
                 }
             } catch (e: Exception) {
                 _networkError.value = e.message
+            }
+
+            // Fallback: Query live stations from OpenChargeMap around (lat, lng)
+            try {
+                val ocmStations = OpenChargeMapClient.fetchStationsNearby(lat, lng, radiusKm)
+                if (ocmStations.isNotEmpty()) {
+                    val existingIds = _stations.value.map { it.id }.toSet()
+                    val newStations = ocmStations.filter { it.id !in existingIds }
+                    _stations.value = if (newStations.isNotEmpty()) _stations.value + newStations else _stations.value
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("VoltRepository", "OpenChargeMap nearby fetch failed: ${e.message}")
             } finally {
                 _isLoading.value = false
             }
@@ -687,6 +742,11 @@ class VoltRepository {
                 finalSoc = (arrivalSoC * 10.0).roundToInt() / 10.0
             )
 
+            // Use OSRM geometry if provided; do NOT call generateFallbackPolyline here
+            // (that function draws a straight line). A null geometry means the map UI will
+            // skip drawing the polyline rather than draw a fake straight line.
+            val resolvedGeometry = geometry
+
             return TripPlanResult(
                 tripId = "ev-trip-${System.currentTimeMillis()}",
                 origin = origin,
@@ -699,7 +759,7 @@ class VoltRepository {
                 isFeasible = true,
                 safetyMarginPercent = (safetyMargin * 10.0).roundToInt() / 10.0,
                 riskScore = (riskScore * 100.0).roundToInt() / 100.0,
-                geometry = geometry,
+                geometry = resolvedGeometry,
                 battery = batteryResult,
                 stops = stops,
                 optimizerData = optimizerData,
@@ -721,28 +781,50 @@ class VoltRepository {
             val leg2StartingEnergy = (targetSoC / 100.0) * vehicle.batteryCapacityKWh
             val arrivalSoC = ((leg2StartingEnergy - leg2Energy) / vehicle.batteryCapacityKWh) * 100.0
 
-            // Place the EV station at the interpolated point along the route
-            val stationLat = if (originLat != 0.0 && destLat != 0.0) {
+            val idealLat = if (originLat != 0.0 && destLat != 0.0) {
                 originLat + (destLat - originLat) * stopFraction
             } else null
-            val stationLng = if (originLng != 0.0 && destLng != 0.0) {
+            val idealLng = if (originLng != 0.0 && destLng != 0.0) {
                 originLng + (destLng - originLng) * stopFraction
             } else null
-            
+
+            // Find closest real-world EV charging station from database along the corridor
+            val candidateStations = _stations.value.ifEmpty { sampleStations }
+            val matchedStation = if (idealLat != null && idealLng != null) {
+                candidateStations.filter { it.latitude != null && it.longitude != null }
+                    .minByOrNull { s ->
+                        val dLat = s.latitude!! - idealLat
+                        val dLng = s.longitude!! - idealLng
+                        dLat * dLat + dLng * dLng
+                    }
+            } else null
+
+            val chosenStation = if (matchedStation != null && idealLat != null && idealLng != null) {
+                val distDeg = Math.hypot(matchedStation.latitude!! - idealLat, matchedStation.longitude!! - idealLng)
+                if (distDeg < 3.0) matchedStation else null
+            } else null
+
+            val stationName = chosenStation?.let { "${it.operator} — ${it.name}" } ?: "Fast DC EV Charging Hub"
+            val stationLat = chosenStation?.latitude ?: idealLat
+            val stationLng = chosenStation?.longitude ?: idealLng
+            val chargerPower = chosenStation?.powerKw?.toDouble() ?: min(150.0, vehicle.maxChargingPowerKw)
+            val actualChargingMins = ((energyToAddKWh / chargerPower) * 60.0 * 1.15).roundToInt()
+
             val stops = listOf(
                 RouteStop(origin, StopType.ORIGIN, 0.0, currentSoC, currentSoC,
                     latitude = if (originLat != 0.0) originLat else null,
                     longitude = if (originLng != 0.0) originLng else null),
                 RouteStop(
-                    name = "VOLT SuperHub — Fast DC 250kW",
+                    name = stationName,
                     type = StopType.CHARGER_STOP,
                     distanceFromOriginKm = stopDistanceKm,
                     arrivalSoC = (chargerArrivalSoC * 10.0).roundToInt() / 10.0,
                     departureSoC = targetSoC,
-                    chargeDurationMinutes = chargingTimeMins,
+                    chargeDurationMinutes = actualChargingMins,
                     energyAddedKWh = (energyToAddKWh * 10.0).roundToInt() / 10.0,
                     latitude = stationLat,
-                    longitude = stationLng
+                    longitude = stationLng,
+                    powerKw = chargerPower.toInt()
                 ),
                 RouteStop(destination, StopType.DESTINATION, distanceKm,
                     (arrivalSoC * 10.0).roundToInt() / 10.0,
@@ -752,8 +834,8 @@ class VoltRepository {
             )
             
             val recommendations = listOf(
-                "🔌 Route optimized with 1 high-speed DC charging stop ($chargingTimeMins min).",
-                "⚡ Charges to 80% SoC for optimal fast-charging efficiency.",
+                "🔌 Route optimized with real fast charger: $stationName ($actualChargingMins min).",
+                "⚡ Charges to 80% SoC for optimal battery efficiency.",
                 "🔋 Battery: ${currentSoC.roundToInt()}% → ${chargerArrivalSoC.roundToInt()}% → 80% → ${arrivalSoC.roundToInt()}% at arrival.",
                 "📍 Estimated distance: ${distanceKm.roundToInt()} km • Drive time: ${drivingTimeMins} min"
             )
@@ -772,6 +854,11 @@ class VoltRepository {
                 totalChargingMinutes = chargingTimeMins,
                 finalSoc = (arrivalSoC * 10.0).roundToInt() / 10.0
             )
+
+            // Use OSRM geometry if provided; do NOT call generateFallbackPolyline here
+            // (that function draws a straight line). The UI will splice in charger stops
+            // using PolylineDecoder.ensurePathVisitsAllStops once real route geometry arrives.
+            val resolvedGeometry = geometry
             
             return TripPlanResult(
                 tripId = "ev-trip-${System.currentTimeMillis()}",
@@ -785,7 +872,7 @@ class VoltRepository {
                 isFeasible = true,
                 safetyMarginPercent = ((arrivalSoC - vehicle.reserveSocPercent) * 10.0).roundToInt() / 10.0,
                 riskScore = 0.22,
-                geometry = geometry,
+                geometry = resolvedGeometry,
                 battery = batteryResult,
                 stops = stops,
                 optimizerData = optimizerData,
@@ -819,11 +906,311 @@ class VoltRepository {
 
     companion object {
         val sampleStations = listOf(
+            // ── Bengaluru ➔ Mangaluru Corridor (NH 75) ──────────────────
             ChargingStation(
-                id = "st-1",
+                id = "st-bm-1",
+                name = "Tata Power Fast Charger @ Swathi Delicacy",
+                operator = "Tata Power EZ Charge",
+                address = "NH 75, Yediyur, Kunigal",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0),
+                    Connector(connectorType = "Type 2", powerKw = 22.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.22,
+                distanceKm = 85.0,
+                latitude = 12.9868,
+                longitude = 76.8835,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bm-2",
+                name = "Zeon Fast Charging Hub @ Channarayapatna",
+                operator = "Zeon Charging",
+                address = "NH 75 Highway, Channarayapatna",
+                powerKw = 120,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 120.0),
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 4,
+                totalPlugs = 4,
+                pricePerKWh = 0.24,
+                distanceKm = 145.0,
+                latitude = 12.9056,
+                longitude = 76.3912,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bm-3",
+                name = "Jio-bp pulse Fast Charger @ Hassan Bypass",
+                operator = "Jio-bp pulse",
+                address = "NH 75 Hassan Bypass, B.Katihalli",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0),
+                    Connector(connectorType = "CHAdeMO", powerKw = 50.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.21,
+                distanceKm = 185.0,
+                latitude = 13.0033,
+                longitude = 76.1004,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bm-4",
+                name = "Relux EV Charging Station @ Sakleshpur",
+                operator = "Relux Electric",
+                address = "BM Road, Sakleshpur Ghat Entry",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.23,
+                distanceKm = 225.0,
+                latitude = 12.9431,
+                longitude = 75.7865,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bm-5",
+                name = "ChargeZone DC Fast Station @ Uppinangady",
+                operator = "ChargeZone",
+                address = "NH 75, Uppinangady Bypass",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.22,
+                distanceKm = 295.0,
+                latitude = 12.8530,
+                longitude = 75.2514,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bm-6",
+                name = "Zeon Charging Hub @ Forum Fiza Mall",
+                operator = "Zeon Charging",
+                address = "Pandeshwar, Mangaluru",
+                powerKw = 120,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 120.0),
+                    Connector(connectorType = "Type 2", powerKw = 22.0)
+                ),
+                availablePlugs = 4,
+                totalPlugs = 4,
+                pricePerKWh = 0.24,
+                distanceKm = 350.0,
+                latitude = 12.8698,
+                longitude = 74.8430,
+                isReachable = true
+            ),
+
+            // ── Bengaluru ➔ Mysuru Corridor (NH 275) ────────────────────
+            ChargingStation(
+                id = "st-bmy-1",
+                name = "Zeon Charging Hub @ Bidadi",
+                operator = "Zeon Charging",
+                address = "Bengaluru-Mysuru Expressway, Bidadi",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.22,
+                distanceKm = 35.0,
+                latitude = 12.7984,
+                longitude = 77.3828,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bmy-2",
+                name = "BESCOM Fast Charger @ Ramanagara",
+                operator = "BESCOM",
+                address = "Expressway Plaza, Ramanagara",
+                powerKw = 50,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 50.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.18,
+                distanceKm = 50.0,
+                latitude = 12.7150,
+                longitude = 77.2810,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bmy-3",
+                name = "Zeon Charging @ Maddur Tiffany's",
+                operator = "Zeon Charging",
+                address = "Expressway Service Rd, Maddur",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.22,
+                distanceKm = 80.0,
+                latitude = 12.5828,
+                longitude = 77.0447,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bmy-4",
+                name = "Tata Power EZ Charge @ Mandya",
+                operator = "Tata Power EZ Charge",
+                address = "Sanjavani Nagar, Mandya",
+                powerKw = 50,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 50.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.20,
+                distanceKm = 100.0,
+                latitude = 12.5218,
+                longitude = 76.8951,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-bmy-5",
+                name = "Jio-bp pulse @ Srirangapatna",
+                operator = "Jio-bp pulse",
+                address = "Mysuru Highway, Srirangapatna",
+                powerKw = 120,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 120.0)
+                ),
+                availablePlugs = 4,
+                totalPlugs = 4,
+                pricePerKWh = 0.23,
+                distanceKm = 125.0,
+                latitude = 12.4180,
+                longitude = 76.6947,
+                isReachable = true
+            ),
+
+            // ── Mumbai ➔ Pune Expressway Corridor ───────────────────────
+            ChargingStation(
+                id = "st-mp-1",
+                name = "Tata Power Fast Charger @ Kharghar",
+                operator = "Tata Power EZ Charge",
+                address = "Sion-Panvel Hwy, Navi Mumbai",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.22,
+                distanceKm = 30.0,
+                latitude = 19.0435,
+                longitude = 73.0685,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-mp-2",
+                name = "Zeon Charging Hub @ Khalapur Food Mall",
+                operator = "Zeon Charging",
+                address = "Mumbai-Pune Expressway Toll, Khalapur",
+                powerKw = 120,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 120.0),
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 4,
+                totalPlugs = 4,
+                pricePerKWh = 0.24,
+                distanceKm = 65.0,
+                latitude = 18.7915,
+                longitude = 73.2842,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-mp-3",
+                name = "Jio-bp pulse @ Lonavala Plaza",
+                operator = "Jio-bp pulse",
+                address = "Old Mumbai-Pune Hwy, Lonavala",
+                powerKw = 120,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 120.0)
+                ),
+                availablePlugs = 4,
+                totalPlugs = 4,
+                pricePerKWh = 0.23,
+                distanceKm = 85.0,
+                latitude = 18.7557,
+                longitude = 73.4091,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-mp-4",
+                name = "Statiq Fast Charger @ Talegaon",
+                operator = "Statiq",
+                address = "Expressway Exit, Talegaon Dabhade",
+                powerKw = 60,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 60.0)
+                ),
+                availablePlugs = 2,
+                totalPlugs = 2,
+                pricePerKWh = 0.21,
+                distanceKm = 115.0,
+                latitude = 18.7300,
+                longitude = 73.6750,
+                isReachable = true
+            ),
+            ChargingStation(
+                id = "st-mp-5",
+                name = "Tata Power EV Superhub @ Wakad",
+                operator = "Tata Power EZ Charge",
+                address = "Hinjawadi Link Rd, Wakad, Pune",
+                powerKw = 150,
+                isFastCharger = true,
+                connectors = listOf(
+                    Connector(connectorType = "CCS2", powerKw = 150.0)
+                ),
+                availablePlugs = 6,
+                totalPlugs = 6,
+                pricePerKWh = 0.24,
+                distanceKm = 145.0,
+                latitude = 18.5987,
+                longitude = 73.7634,
+                isReachable = true
+            ),
+
+            // ── US California Corridors ─────────────────────────────────
+            ChargingStation(
+                id = "st-us-1",
                 name = "VOLT HyperCharge Gateway",
                 operator = "VOLT Grid",
-                address = "1040 Innovation Pkwy",
+                address = "1040 Innovation Pkwy, San Francisco",
                 powerKw = 350,
                 isFastCharger = true,
                 connectors = listOf(
@@ -839,10 +1226,10 @@ class VoltRepository {
                 isReachable = true
             ),
             ChargingStation(
-                id = "st-2",
+                id = "st-us-2",
                 name = "Electrify Station Express",
                 operator = "Electrify America",
-                address = "450 Metro Boulevard",
+                address = "450 Metro Boulevard, Oakland",
                 powerKw = 150,
                 isFastCharger = true,
                 connectors = listOf(
@@ -858,10 +1245,10 @@ class VoltRepository {
                 isReachable = true
             ),
             ChargingStation(
-                id = "st-3",
+                id = "st-us-3",
                 name = "Tesla Supercharger Hub",
                 operator = "Tesla Open Network",
-                address = "780 Silicon Expressway",
+                address = "780 Silicon Expressway, Palo Alto",
                 powerKw = 250,
                 isFastCharger = true,
                 connectors = listOf(
@@ -874,24 +1261,6 @@ class VoltRepository {
                 distanceKm = 8.1,
                 latitude = 37.4419,
                 longitude = -122.1430,
-                isReachable = true
-            ),
-            ChargingStation(
-                id = "st-4",
-                name = "GreenPower Urban AC Hub",
-                operator = "ChargePoint",
-                address = "22 Marketplace Center",
-                powerKw = 22,
-                isFastCharger = false,
-                connectors = listOf(
-                    Connector(connectorType = "Type 2", powerKw = 22.0)
-                ),
-                availablePlugs = 4,
-                totalPlugs = 4,
-                pricePerKWh = 0.24,
-                distanceKm = 1.1,
-                latitude = 37.7833,
-                longitude = -122.4167,
                 isReachable = true
             )
         )

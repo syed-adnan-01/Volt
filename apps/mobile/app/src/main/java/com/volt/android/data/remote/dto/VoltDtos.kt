@@ -1,7 +1,39 @@
 package com.volt.android.data.remote.dto
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * Custom serializer that accepts a String, JsonObject, or JsonArray for geometry
+ * and converts it into a String representation, preventing deserialization errors.
+ */
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+object FlexibleStringSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleString", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value != null) encoder.encodeString(value) else encoder.encodeNull()
+    }
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonInput = decoder as? JsonDecoder ?: return try { decoder.decodeString() } catch (_: Exception) { null }
+        val element = jsonInput.decodeJsonElement()
+        return when (element) {
+            is JsonNull -> null
+            is JsonPrimitive -> element.content
+            else -> element.toString()
+        }
+    }
+}
 
 // ──────────────────────────────────────────────
 // Standard VOLT API Gateway Response Envelopes
@@ -181,7 +213,7 @@ data class RouteStrategyDto(
     @SerialName("battery") val battery: BatteryResultDto? = null,
     @SerialName("optimizer_data") val optimizerData: OptimizerDataDto? = null,
     @SerialName("stops") val stops: List<TripStopDto> = emptyList(),
-    @SerialName("geometry") val geometry: String? = null
+    @Serializable(with = FlexibleStringSerializer::class) @SerialName("geometry") val geometry: String? = null
 )
 
 @Serializable
@@ -189,7 +221,7 @@ data class TripPlanDto(
     @SerialName("trip_id") val tripId: String? = null,
     @SerialName("distance_km") val distanceKm: Double,
     @SerialName("duration_minutes") val durationMinutes: Int,
-    @SerialName("geometry") val geometry: String? = null,
+    @Serializable(with = FlexibleStringSerializer::class) @SerialName("geometry") val geometry: String? = null,
     @SerialName("battery") val battery: BatteryResultDto? = null,
     @SerialName("stops") val stops: List<TripStopDto> = emptyList(),
     @SerialName("optimizer_data") val optimizerData: OptimizerDataDto? = null,

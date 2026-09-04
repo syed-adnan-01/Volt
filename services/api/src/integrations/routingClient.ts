@@ -58,22 +58,42 @@ export async function getRoutes(
     
     console.warn('⚠️ Routing service failed, using mock data for development.', error.message);
     
-    // For development (Phase 2), we gracefully fallback to mock candidate routes so the API works independently
+    // For development (Phase 2), we gracefully fallback to mock candidate routes with valid GeoJSON geometry
     const distanceKm = Math.sqrt(Math.pow(destLat - originLat, 2) + Math.pow(destLng - originLng, 2)) * 111; // Rough Haversine
+
+    const generateLinearCoordinates = (oLat: number, oLng: number, dLat: number, dLng: number, steps = 20): [number, number][] => {
+      const coords: [number, number][] = [];
+      for (let i = 0; i <= steps; i++) {
+        const fraction = i / steps;
+        coords.push([
+          parseFloat((oLng + (dLng - oLng) * fraction).toFixed(6)),
+          parseFloat((oLat + (dLat - oLat) * fraction).toFixed(6)),
+        ]);
+      }
+      return coords;
+    };
+
+    const primaryCoords = generateLinearCoordinates(originLat, originLng, destLat, destLng);
     const primaryRoute: RoutingResult = {
       distanceKm: parseFloat(distanceKm.toFixed(2)),
       durationMinutes: parseFloat((distanceKm / 1.5).toFixed(0)), // ~90km/h avg
       detourMinutes: 0,
-      geometry: [],
+      geometry: { type: 'LineString', coordinates: primaryCoords } as any,
     };
 
     const routes: RoutingResult[] = [primaryRoute];
     if (distanceKm > 20) {
+      const midLat = (originLat + destLat) / 2 + 0.05;
+      const midLng = (originLng + destLng) / 2 + 0.05;
+      const altCoords = [
+        ...generateLinearCoordinates(originLat, originLng, midLat, midLng, 10),
+        ...generateLinearCoordinates(midLat, midLng, destLat, destLng, 10).slice(1),
+      ];
       routes.push({
         distanceKm: parseFloat((distanceKm * 1.12).toFixed(2)),
         durationMinutes: parseFloat(((distanceKm * 1.12) / 1.4).toFixed(0)),
         detourMinutes: parseFloat((((distanceKm * 1.12) / 1.4) - (distanceKm / 1.5)).toFixed(0)),
-        geometry: [],
+        geometry: { type: 'LineString', coordinates: altCoords } as any,
       });
     }
 

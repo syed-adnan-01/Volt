@@ -118,35 +118,62 @@ fun TripPlannerScreen(
     var hasDestCoords by remember { mutableStateOf(false) }
 
     val presets = listOf(
-        RoutePreset("Bengaluru", "Mysuru", 143.5, 12.9716, 77.5946, 12.2958, 76.6394),
+        RoutePreset("Bengaluru", "Mangaluru", 350.0, 12.9716, 77.5946, 12.9141, 74.8560),
+        RoutePreset("Delhi", "Jaipur", 280.0, 28.6139, 77.2090, 26.9124, 75.7873),
+        RoutePreset("Bengaluru", "Chennai", 340.0, 12.9716, 77.5946, 13.0827, 80.2707),
+        RoutePreset("Delhi", "Agra", 230.0, 28.6139, 77.2090, 27.1767, 78.0081),
         RoutePreset("Mumbai", "Pune", 152.0, 19.0760, 72.8777, 18.5204, 73.8567),
+        RoutePreset("Bengaluru", "Mysuru", 143.5, 12.9716, 77.5946, 12.2958, 76.6394),
+        RoutePreset("Hyderabad", "Vijayawada", 275.0, 17.3850, 78.4867, 16.5062, 80.6480),
         RoutePreset("San Francisco", "Lake Tahoe", 315.0, 37.7749, -122.4194, 39.0968, -120.0324),
-        RoutePreset("Los Angeles", "Las Vegas", 435.0, 34.0522, -118.2437, 36.1699, -115.1398),
-        RoutePreset("San Jose", "Sacramento", 195.0, 37.3382, -121.8863, 38.5816, -121.4944)
+        RoutePreset("Los Angeles", "Las Vegas", 435.0, 34.0522, -118.2437, 36.1699, -115.1398)
     )
 
     val scrollState = rememberScrollState()
 
     // ──────────────────────────────────────────────
-    // Prepare map data
+    // Prepare map data & continuous route line
     // ──────────────────────────────────────────────
     val geometry = uiState.tripPlan.geometry
-    val hasRoute = !geometry.isNullOrBlank()
+    val originStop = uiState.tripPlan.stops.firstOrNull { it.type == StopType.ORIGIN }
+    val destStop = uiState.tripPlan.stops.lastOrNull { it.type == StopType.DESTINATION }
 
-    val routePoints = if (hasRoute) {
-        remember(geometry) { PolylineDecoder.decode(geometry!!) }
-    } else {
-        emptyList()
+    val effectiveOriginLat = originStop?.latitude ?: currentOriginLat
+    val effectiveOriginLng = originStop?.longitude ?: currentOriginLng
+    val effectiveDestLat = destStop?.latitude ?: currentDestLat
+    val effectiveDestLng = destStop?.longitude ?: currentDestLng
+
+    val originCoord = LatLng(effectiveOriginLat, effectiveOriginLng)
+    val destCoord = LatLng(effectiveDestLat, effectiveDestLng)
+
+    // Extract all planned charging stops with valid coordinates
+    val chargerStopCoords = remember(uiState.tripPlan.stops) {
+        uiState.tripPlan.stops
+            .filter { it.type == StopType.CHARGER_STOP && it.latitude != null && it.longitude != null }
+            .map { LatLng(it.latitude!!, it.longitude!!) }
     }
+
+    // Decode backend geometry and ensure the path connects through ALL charging stops
+    val routePoints = remember(geometry, uiState.tripPlan.stops, effectiveOriginLat, effectiveOriginLng, effectiveDestLat, effectiveDestLng) {
+        val decoded = PolylineDecoder.decode(geometry)
+        PolylineDecoder.ensurePathVisitsAllStops(
+            baseRoute = decoded,
+            origin = originCoord,
+            chargingStops = chargerStopCoords,
+            destination = destCoord
+        )
+    }
+
+    val hasRoute = routePoints.size >= 2 || uiState.tripPlan.stops.isNotEmpty() || (uiState.tripPlan.distanceKm > 0 && uiState.tripPlan.origin.isNotBlank())
 
     // Route markers (after route is calculated)
     val mapMarkers = if (hasRoute) {
-        remember(uiState.tripPlan.stops, uiState.stations, currentOriginLat, currentOriginLng, currentDestLat, currentDestLng) {
+        remember(uiState.tripPlan.stops, uiState.stations, effectiveOriginLat, effectiveOriginLng, effectiveDestLat, effectiveDestLng, routePoints) {
             val markers = mutableListOf<RouteMarker>()
             // Origin marker
             markers.add(
                 RouteMarker(
-                    position = LatLng(currentOriginLat, currentOriginLng),
+                    position = LatLng(effectiveOriginLat, effectiveOriginLng),
                     title = uiState.tripPlan.origin.ifBlank { "Origin" },
                     snippet = "Start • ${batteryPercent.toInt()}% SoC",
                     type = MarkerType.ORIGIN
@@ -177,7 +204,7 @@ fun TripPlannerScreen(
                             (stop.distanceFromOriginKm / uiState.tripPlan.distanceKm).coerceIn(0.0, 1.0)
                         } else 0.5
                         val pointIndex = (fraction * (routePoints.size - 1)).toInt().coerceIn(0, routePoints.lastIndex)
-                        routePoints.getOrElse(pointIndex) { LatLng(currentOriginLat, currentOriginLng) }
+                        routePoints.getOrElse(pointIndex) { LatLng(effectiveOriginLat, effectiveOriginLng) }
                     }
                     markers.add(
                         RouteMarker(
@@ -191,7 +218,7 @@ fun TripPlannerScreen(
             // Destination marker
             markers.add(
                 RouteMarker(
-                    position = LatLng(currentDestLat, currentDestLng),
+                    position = LatLng(effectiveDestLat, effectiveDestLng),
                     title = uiState.tripPlan.destination.ifBlank { "Destination" },
                     snippet = "Arrive • ${uiState.tripPlan.arrivalSoC.toInt()}% SoC",
                     type = MarkerType.DESTINATION

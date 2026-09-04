@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.model.LatLng
 import com.volt.android.data.PolylineDecoder
+import com.volt.android.data.models.StopType
 import com.volt.android.data.models.VehicleProfile
 import com.volt.android.ui.components.BatteryGauge
 import com.volt.android.ui.components.MarkerType
@@ -669,23 +670,41 @@ fun DashboardScreen(
         // 9. Mini Route Map Preview (if available)
         // ──────────────────────────────────────────────
         val lastRouteGeometry = uiState.tripPlan.geometry
-        if (!lastRouteGeometry.isNullOrBlank()) {
-            val previewRoutePoints = remember(lastRouteGeometry) {
-                PolylineDecoder.decode(lastRouteGeometry)
-            }
-            val previewMarkers = remember(uiState.tripPlan) {
-                listOf(
-                    RouteMarker(
-                        position = previewRoutePoints.firstOrNull() ?: LatLng(0.0, 0.0),
-                        title = uiState.tripPlan.origin,
-                        type = MarkerType.ORIGIN
-                    ),
-                    RouteMarker(
-                        position = previewRoutePoints.lastOrNull() ?: LatLng(0.0, 0.0),
-                        title = uiState.tripPlan.destination,
-                        type = MarkerType.DESTINATION
-                    )
-                )
+        val originStop = uiState.tripPlan.stops.firstOrNull { it.type == StopType.ORIGIN }
+        val destStop = uiState.tripPlan.stops.lastOrNull { it.type == StopType.DESTINATION }
+        val originCoord = if (originStop?.latitude != null && originStop.longitude != null) {
+            LatLng(originStop.latitude!!, originStop.longitude!!)
+        } else null
+        val destCoord = if (destStop?.latitude != null && destStop.longitude != null) {
+            LatLng(destStop.latitude!!, destStop.longitude!!)
+        } else null
+        val chargerStops = uiState.tripPlan.stops
+            .filter { it.type == StopType.CHARGER_STOP && it.latitude != null && it.longitude != null }
+            .map { LatLng(it.latitude!!, it.longitude!!) }
+
+        val previewRoutePoints = remember(lastRouteGeometry, uiState.tripPlan.stops) {
+            val decoded = PolylineDecoder.decode(lastRouteGeometry)
+            PolylineDecoder.ensurePathVisitsAllStops(
+                baseRoute = decoded,
+                origin = originCoord,
+                chargingStops = chargerStops,
+                destination = destCoord
+            )
+        }
+
+        if (previewRoutePoints.size >= 2 || !lastRouteGeometry.isNullOrBlank()) {
+            val previewMarkers = remember(previewRoutePoints, uiState.tripPlan) {
+                val list = mutableListOf<RouteMarker>()
+                previewRoutePoints.firstOrNull()?.let {
+                    list.add(RouteMarker(position = it, title = uiState.tripPlan.origin.ifBlank { "Origin" }, type = MarkerType.ORIGIN))
+                }
+                uiState.tripPlan.stops.filter { it.type == StopType.CHARGER_STOP && it.latitude != null && it.longitude != null }.forEach { s ->
+                    list.add(RouteMarker(position = LatLng(s.latitude!!, s.longitude!!), title = "🛑 ${s.name}", snippet = "Charge to ${s.departureSoC.toInt()}%", type = MarkerType.WAYPOINT))
+                }
+                previewRoutePoints.lastOrNull()?.let {
+                    list.add(RouteMarker(position = it, title = uiState.tripPlan.destination.ifBlank { "Destination" }, type = MarkerType.DESTINATION))
+                }
+                list
             }
 
             Row(

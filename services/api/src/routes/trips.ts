@@ -109,7 +109,7 @@ tripsRouter.post(
       const driveTimeMins = Math.round(route.durationMinutes);
 
       const batteryResult = await checkReachability(
-        body.vehicle_id,
+        body.vehicle_id || vehicleRow.id,
         body.current_soc,
         route.distanceKm,
         vehicleProfile
@@ -175,7 +175,7 @@ tripsRouter.post(
           const optimizerResult = await optimizeTrip({
             origin: { lat: body.origin_lat, lng: body.origin_lng, name: 'Origin' },
             destination: { lat: body.dest_lat, lng: body.dest_lng, name: 'Destination' },
-            vehicleId: body.vehicle_id,
+            vehicleId: body.vehicle_id || vehicleRow.id,
             currentSoc: body.current_soc,
             vehicleProfile,
             candidateChargers,
@@ -247,7 +247,9 @@ tripsRouter.post(
                 optimizerData: optData,
                 optimizer_data: optData,
                 stops: formattedStops,
-                geometry: typeof route.geometry === 'string' ? route.geometry : JSON.stringify(route.geometry),
+                geometry: optimizerResult.geometry
+                  ? (typeof optimizerResult.geometry === 'string' ? optimizerResult.geometry : JSON.stringify(optimizerResult.geometry))
+                  : (typeof route.geometry === 'string' ? route.geometry : JSON.stringify(route.geometry)),
               });
             }
 
@@ -314,7 +316,9 @@ tripsRouter.post(
                     optimizerData: altOptData,
                     optimizer_data: altOptData,
                     stops: altStops,
-                    geometry: typeof route.geometry === 'string' ? route.geometry : JSON.stringify(route.geometry),
+                    geometry: alt.geometry
+                      ? (typeof alt.geometry === 'string' ? alt.geometry : JSON.stringify(alt.geometry))
+                      : (typeof route.geometry === 'string' ? route.geometry : JSON.stringify(route.geometry)),
                   });
                 }
               }

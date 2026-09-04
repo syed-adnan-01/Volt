@@ -34,6 +34,7 @@ export interface OptimizerAlternative {
   destinationSoCPct: number;
   totalCost?: number;
   reason: string;
+  geometry?: any;
 }
 
 export interface OptimizerResult {
@@ -49,6 +50,7 @@ export interface OptimizerResult {
   reasons?: string[];
   mode?: string;
   alternatives?: OptimizerAlternative[];
+  geometry?: any;
 }
 
 export interface OptimizeTripParams {
@@ -65,6 +67,22 @@ export interface OptimizeTripParams {
   candidateChargers?: Charger[];
   predictions?: Record<string, ChargerPrediction>;
   mode?: 'FASTEST' | 'MOST_RELIABLE' | 'MINIMUM_CHARGING' | 'BALANCED';
+}
+
+function extractCoordinatesFromGeometry(geom: unknown): [number, number][] {
+  if (!geom) return [];
+  if (Array.isArray(geom)) {
+    if (geom.length > 0 && Array.isArray(geom[0])) {
+      return geom as [number, number][];
+    }
+  }
+  if (typeof geom === 'object' && geom !== null && 'coordinates' in geom) {
+    const coords = (geom as { coordinates?: unknown }).coordinates;
+    if (Array.isArray(coords)) {
+      return coords as [number, number][];
+    }
+  }
+  return [];
 }
 
 /**
@@ -157,6 +175,19 @@ export async function optimizeTrip(
           powerKw: stop.charger?.powerKw ?? 60,
         }));
 
+        let altCoordinates: [number, number][] = [];
+        if (Array.isArray(alt.legs)) {
+          for (const leg of alt.legs) {
+            if (leg?.geometry) {
+              const coords = extractCoordinatesFromGeometry(leg.geometry);
+              if (coords.length > 0) altCoordinates.push(...coords);
+            }
+          }
+        }
+        const altGeometry = altCoordinates.length > 0
+          ? { type: 'LineString', coordinates: altCoordinates }
+          : (alt.geometry || null);
+
         return {
           rank: alt.rank ?? 2,
           stops: altStops,
@@ -168,8 +199,26 @@ export async function optimizeTrip(
           destinationSoCPct: alt.destinationSoCPct,
           totalCost: alt.totalCost,
           reason: alt.reason || 'Alternative route with charging stops',
+          geometry: altGeometry,
         };
       });
+
+      // Combine individual leg geometries into a continuous route path through all stops
+      let combinedCoordinates: [number, number][] = [];
+      if (Array.isArray(data.legs)) {
+        for (const leg of data.legs) {
+          if (leg?.geometry) {
+            const coords = extractCoordinatesFromGeometry(leg.geometry);
+            if (coords.length > 0) {
+              combinedCoordinates.push(...coords);
+            }
+          }
+        }
+      }
+
+      const routeGeometry = combinedCoordinates.length > 0
+        ? { type: 'LineString', coordinates: combinedCoordinates }
+        : (data.routeGeometry || data.geometry || null);
 
       const mainReason = data.reason ?? 'Optimized with Member 5 EV routing engine';
 
@@ -186,6 +235,7 @@ export async function optimizeTrip(
         reasons: [mainReason],
         mode: data.mode ?? mode,
         alternatives,
+        geometry: routeGeometry,
       };
     } else if (response.status === 422) {
       return {
@@ -276,6 +326,14 @@ export async function optimizeTrip(
   }
 
   const fallbackReason = 'Selected lowest predicted wait corridor station via intelligent fallback strategy';
+  const fallbackGeometry = {
+    type: 'LineString',
+    coordinates: [
+      [origin.lng, origin.lat],
+      [selectedCharger.longitude, selectedCharger.latitude],
+      [destination.lng, destination.lat]
+    ]
+  };
 
   return {
     status: 'OPTIMAL',
@@ -287,6 +345,7 @@ export async function optimizeTrip(
     reasons: [fallbackReason],
     mode,
     alternatives: fallbackAlternatives,
+    geometry: fallbackGeometry,
   };
 }
 

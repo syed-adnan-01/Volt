@@ -211,14 +211,16 @@ fun VoltMapView(
                     // Glow/shadow polyline underneath
                     Polyline(
                         points = routePoints,
-                        color = VoltCyan.copy(alpha = 0.3f),
-                        width = 22f
+                        color = VoltCyan.copy(alpha = 0.35f),
+                        width = 24f,
+                        geodesic = true
                     )
                     // Main route polyline
                     Polyline(
                         points = routePoints,
                         color = VoltCyan,
-                        width = 12f
+                        width = 12f,
+                        geodesic = true
                     )
                 }
 
