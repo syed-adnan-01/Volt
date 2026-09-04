@@ -1047,8 +1047,6 @@ fun TripPlannerScreen(
                             dLng,
                             batteryPercent.toDouble()
                         )
-                        // Automatically start navigation so journey starts on the map immediately
-                        onStartNavigation()
                     },
                     enabled = !uiState.isLoading,
                     modifier = Modifier.fillMaxWidth(),

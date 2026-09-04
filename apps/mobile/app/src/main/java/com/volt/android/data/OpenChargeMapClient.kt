@@ -65,10 +65,13 @@ object OpenChargeMapClient {
         originLng: Double,
         destLat: Double,
         destLng: Double,
-        maxResults: Int = 25
+        maxResults: Int = 80
     ): List<ChargingStation> = withContext(Dispatchers.IO) {
         if (originLat == 0.0 || destLat == 0.0) return@withContext emptyList()
 
+        val allStationsMap = mutableMapOf<String, ChargingStation>()
+
+        // 1. Primary corridor bounding box query
         val minLat = min(originLat, destLat) - 0.25
         val maxLat = max(originLat, destLat) + 0.25
         val minLng = min(originLng, destLng) - 0.25
@@ -81,17 +84,22 @@ object OpenChargeMapClient {
                 "&compact=true&verbose=false" +
                 "&key=${getApiKey()}"
 
-        val results = fetchFromUrl(url)
-        if (results.isNotEmpty()) {
-            logD("Fetched ${results.size} corridor stations for ($originLat,$originLng)->($destLat,$destLng)")
-            return@withContext results
+        val bboxResults = fetchFromUrl(url)
+        bboxResults.forEach { s -> allStationsMap[s.id] = s }
+
+        // 2. Multi-waypoint corridor sampling (at 20%, 40%, 60%, 80% along route corridor)
+        // Guarantees real EV stations in intermediate highway towns (Ramanagara, Mandya, Maddur, etc.) are fetched
+        val sampleFractions = listOf(0.2, 0.4, 0.6, 0.8)
+        for (fraction in sampleFractions) {
+            val wpLat = originLat + (destLat - originLat) * fraction
+            val wpLng = originLng + (destLng - originLng) * fraction
+            val wpStations = fetchStationsNearby(wpLat, wpLng, radiusKm = 45.0, maxResults = 15)
+            wpStations.forEach { s -> allStationsMap[s.id] = s }
         }
 
-        val midLat = (originLat + destLat) / 2.0
-        val midLng = (originLng + destLng) / 2.0
-        val midpointStations = fetchStationsNearby(midLat, midLng, radiusKm = 80.0, maxResults = 15)
-        logD("Midpoint search returned ${midpointStations.size} stations")
-        midpointStations
+        val combined = allStationsMap.values.toList()
+        logD("Corridor multi-waypoint search returned ${combined.size} total unique stations for ($originLat,$originLng)->($destLat,$destLng)")
+        combined
     }
 
     suspend fun fetchStationsNearby(
