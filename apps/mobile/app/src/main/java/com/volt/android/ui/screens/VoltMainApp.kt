@@ -29,7 +29,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.volt.android.data.LiveLocationTracker
 import com.volt.android.ui.components.ProfileDialog
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
@@ -44,6 +46,8 @@ import com.volt.android.ui.viewmodel.VoltViewModel
 fun VoltMainApp(
     viewModel: VoltViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val locationTracker = remember(context) { LiveLocationTracker(context) }
     val uiState by viewModel.uiState.collectAsState()
     var showProfileDialog by remember { mutableStateOf(false) }
 
@@ -201,7 +205,9 @@ fun VoltMainApp(
                     onSelectStrategy = { viewModel.selectStrategy(it) },
                     onAcceptReroute = { viewModel.acceptReroute(it) },
                     onDismissReroute = { viewModel.dismissRerouteAlert() },
-                    onTriggerSimulatedReroute = { viewModel.triggerSimulatedReroute() }
+                    onTriggerSimulatedReroute = { viewModel.triggerSimulatedReroute() },
+                    onStartNavigation = { viewModel.startTripNavigation(locationTracker) },
+                    onStopNavigation = { viewModel.stopTripNavigation() }
                 )
                 VoltNavTab.CHARGERS -> ChargingScreen(
                     uiState = uiState,

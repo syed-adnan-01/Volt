@@ -108,19 +108,18 @@ tripsRouter.post(
 
         finalStops = optimizerResult.stops;
 
-        // Ensure mock stations exist in DB to prevent foreign key errors for trip_stops
+        // Ensure stations exist in DB to prevent foreign key errors for trip_stops
         for (const stop of finalStops) {
           await query(
-            `INSERT INTO charging_stations (id, name, latitude, longitude, operator_name, max_power_kw)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO charging_stations (id, name, operator, location, status)
+             VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), 'active')
              ON CONFLICT (id) DO NOTHING`,
             [
               stop.stationId,
               stop.name || `Station ${stop.stationId.substring(0, 8)}`,
-              stop.latitude,
-              stop.longitude,
               'VOLT Network',
-              stop.powerKw || 60
+              stop.longitude,
+              stop.latitude
             ]
           );
         }
@@ -192,6 +191,54 @@ tripsRouter.post(
       mode: optimizerResult.mode,
     } : null;
 
+    // 8. Construct real backend-calculated route strategies (Task 2B)
+    const driveTimeMins = Math.round(route.durationMinutes);
+    const totalEnergyKwh = Number((batteryResult.energyRequiredKWh || (route.distanceKm * vehicleProfile.consumptionKwhPerKm)).toFixed(1));
+    const strategies = [];
+
+    if (batteryResult.reachable) {
+      strategies.push({
+        id: 'RECOMMENDED',
+        title: 'Recommended (Direct)',
+        tag: '⚡ DIRECT ROUTE',
+        totalTimeMinutes: driveTimeMins,
+        total_time_minutes: driveTimeMins,
+        driveTimeMinutes: driveTimeMins,
+        drive_time_minutes: driveTimeMins,
+        chargeTimeMinutes: 0,
+        charge_time_minutes: 0,
+        arrivalSoc: Number((batteryResult.arrivalSoC).toFixed(1)),
+        arrival_soc: Number((batteryResult.arrivalSoC).toFixed(1)),
+        energyKwh: totalEnergyKwh,
+        energy_kwh: totalEnergyKwh,
+        whyExplanation: `Direct route feasible without intermediate charging (${(batteryResult.safetyMarginPercent ?? 10).toFixed(1)}% buffer above reserve).`,
+        why_explanation: `Direct route feasible without intermediate charging (${(batteryResult.safetyMarginPercent ?? 10).toFixed(1)}% buffer above reserve).`,
+      });
+    } else if (optimizerResult) {
+      const optChargeTime = optimizerResult.totalChargingMinutes;
+      const optWaitTime = optimizerResult.totalWaitMinutes || 0;
+      const optTotalTime = driveTimeMins + optChargeTime + Math.round(optWaitTime);
+      const optArrivalSoc = optimizerResult.finalSoc;
+
+      strategies.push({
+        id: 'RECOMMENDED',
+        title: 'Recommended (Balanced)',
+        tag: '⚡ AI OPTIMIZED',
+        totalTimeMinutes: optTotalTime,
+        total_time_minutes: optTotalTime,
+        driveTimeMinutes: driveTimeMins,
+        drive_time_minutes: driveTimeMins,
+        chargeTimeMinutes: optChargeTime,
+        charge_time_minutes: optChargeTime,
+        arrivalSoc: optArrivalSoc,
+        arrival_soc: optArrivalSoc,
+        energyKwh: totalEnergyKwh,
+        energy_kwh: totalEnergyKwh,
+        whyExplanation: optimizerResult.reason || 'Multi-stop route optimized for minimum combined travel time and queue wait.',
+        why_explanation: optimizerResult.reason || 'Multi-stop route optimized for minimum combined travel time and queue wait.',
+      });
+    }
+
     return c.json({
       success: true,
       data: {
@@ -209,6 +256,7 @@ tripsRouter.post(
         stops: formattedStops,
         optimizerData: formattedOptimizerData,
         optimizer_data: formattedOptimizerData,
+        strategies,
       },
       error: null,
       meta: {

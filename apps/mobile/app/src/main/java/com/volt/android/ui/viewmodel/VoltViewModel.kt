@@ -2,6 +2,8 @@ package com.volt.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.maps.model.LatLng
+import com.volt.android.data.LiveLocationTracker
 import com.volt.android.data.VoltRepository
 import com.volt.android.data.models.BatteryTelemetry
 import com.volt.android.data.models.ChargingStation
@@ -11,6 +13,7 @@ import com.volt.android.data.models.TripPlanResult
 import com.volt.android.data.models.UserProfile
 import com.volt.android.data.models.VehicleProfile
 import com.volt.android.data.remote.AuthSessionManager
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,11 +47,14 @@ data class VoltUiState(
     val currentUser: UserProfile? = null,
     val isAuthenticated: Boolean = false,
     val isAuthLoading: Boolean = false,
-    val authError: String? = null
+    val authError: String? = null,
+    val isNavigating: Boolean = false,
+    val userLocation: LatLng? = null
 )
 
 class VoltViewModel(
-    private val repository: VoltRepository = VoltRepository()
+    private val repository: VoltRepository = VoltRepository(),
+    private val locationTracker: LiveLocationTracker? = null
 ) : ViewModel() {
 
     private val _currentTab = MutableStateFlow(VoltNavTab.DASHBOARD)
@@ -62,6 +68,14 @@ class VoltViewModel(
 
     private val _isAuthLoading = MutableStateFlow(false)
     private val _authError = MutableStateFlow<String?>(null)
+
+    private val _isNavigating = MutableStateFlow(false)
+    val isNavigating: StateFlow<Boolean> = _isNavigating.asStateFlow()
+
+    private val _userLocation = MutableStateFlow<LatLng?>(null)
+    val userLocation: StateFlow<LatLng?> = _userLocation.asStateFlow()
+
+    private var locationJob: Job? = null
 
     init {
         if (AuthSessionManager.isAuthenticated.value) {
@@ -101,8 +115,12 @@ class VoltViewModel(
             AuthSessionManager.isAuthenticated,
             _isAuthLoading,
             _authError
-        ) { p2 -> p2 }
-    ) { p1, p2 ->
+        ) { p2 -> p2 },
+        combine(
+            _isNavigating,
+            _userLocation
+        ) { p3 -> p3 }
+    ) { p1, p2, p3 ->
         val vehicle = p1[0] as VehicleProfile
         @Suppress("UNCHECKED_CAST")
         val allVehicles = p1[1] as List<VehicleProfile>
@@ -123,6 +141,9 @@ class VoltViewModel(
         val authLoading = p2[5] as Boolean
         val authErr = p2[6] as String?
 
+        val isNav = p3[0] as Boolean
+        val userLoc = p3[1] as LatLng?
+
         VoltUiState(
             selectedVehicle = vehicle,
             allVehicles = allVehicles,
@@ -140,7 +161,9 @@ class VoltViewModel(
             currentUser = user,
             isAuthenticated = authed,
             isAuthLoading = authLoading,
-            authError = authErr
+            authError = authErr,
+            isNavigating = isNav,
+            userLocation = userLoc
         )
     }.stateIn(
         scope = viewModelScope,
@@ -355,5 +378,34 @@ class VoltViewModel(
 
     fun toggleAvailableOnlyFilter() {
         _filterAvailableOnly.value = !_filterAvailableOnly.value
+    }
+
+    // ──────────────────────────────────────────────
+    // Live Location & Active Trip Navigation
+    // ──────────────────────────────────────────────
+
+    fun startTripNavigation(customTracker: LiveLocationTracker? = null) {
+        val activeTracker = customTracker ?: locationTracker
+        _isNavigating.value = true
+        locationJob?.cancel()
+        if (activeTracker != null) {
+            locationJob = viewModelScope.launch {
+                activeTracker.getLocationUpdates().collect { latLng ->
+                    _userLocation.value = latLng
+                }
+            }
+        }
+    }
+
+    fun stopTripNavigation() {
+        _isNavigating.value = false
+        locationJob?.cancel()
+        locationJob = null
+        _userLocation.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        locationJob?.cancel()
     }
 }

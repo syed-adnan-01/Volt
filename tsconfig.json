@@ -14,6 +14,9 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "files": [],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "packages/*/src/**/*",
+    "services/*/src/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "apps"]
 }

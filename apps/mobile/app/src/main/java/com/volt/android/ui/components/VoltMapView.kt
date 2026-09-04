@@ -52,7 +52,7 @@ data class RouteMarker(
 )
 
 enum class MarkerType {
-    ORIGIN, DESTINATION, CHARGER, WAYPOINT
+    ORIGIN, DESTINATION, CHARGER, WAYPOINT, USER_LOCATION
 }
 
 // Dark-themed map style JSON for Google Maps matching the VOLT design language
@@ -91,6 +91,7 @@ private val VOLT_DARK_MAP_STYLE = """
 fun VoltMapView(
     routePoints: List<LatLng>,
     markers: List<RouteMarker> = emptyList(),
+    userLocation: LatLng? = null,
     mapHeight: Dp = 280.dp,
     isInteractive: Boolean = true,
     modifier: Modifier = Modifier
@@ -98,16 +99,19 @@ fun VoltMapView(
     val cameraPositionState = rememberCameraPositionState {
         // Default to US center if no route points
         position = CameraPosition.fromLatLngZoom(
-            LatLng(37.7749, -122.4194), 6f
+            userLocation ?: LatLng(37.7749, -122.4194), 6f
         )
     }
 
     // Auto-fit camera to route bounds when route points change
-    LaunchedEffect(routePoints) {
+    LaunchedEffect(routePoints, userLocation) {
         if (routePoints.size >= 2) {
             val boundsBuilder = LatLngBounds.Builder()
             routePoints.forEach { boundsBuilder.include(it) }
             markers.forEach { boundsBuilder.include(it.position) }
+            if (userLocation != null) {
+                boundsBuilder.include(userLocation)
+            }
             try {
                 val bounds = boundsBuilder.build()
                 cameraPositionState.animate(
@@ -117,6 +121,11 @@ fun VoltMapView(
             } catch (_: Exception) {
                 // Fallback if bounds computation fails
             }
+        } else if (userLocation != null) {
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(userLocation, 14f),
+                durationMs = 800
+            )
         }
     }
 
@@ -180,12 +189,23 @@ fun VoltMapView(
                         MarkerType.DESTINATION -> BitmapDescriptorFactory.HUE_GREEN
                         MarkerType.CHARGER -> BitmapDescriptorFactory.HUE_ORANGE
                         MarkerType.WAYPOINT -> BitmapDescriptorFactory.HUE_VIOLET
+                        MarkerType.USER_LOCATION -> BitmapDescriptorFactory.HUE_AZURE
                     }
                     Marker(
                         state = MarkerState(position = marker.position),
                         title = marker.title,
                         snippet = marker.snippet,
                         icon = BitmapDescriptorFactory.defaultMarker(hue)
+                    )
+                }
+
+                // Draw live GPS user location marker
+                if (userLocation != null) {
+                    Marker(
+                        state = MarkerState(position = userLocation),
+                        title = "Current Position",
+                        snippet = "Live GPS Navigation",
+                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
                     )
                 }
             }

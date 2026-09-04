@@ -21,7 +21,7 @@ export async function getRoute(
     return cachedRoute;
   }
 
-  const url = `${env.OSRM_BASE_URL}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full`;
+  const url = `${env.OSRM_BASE_URL}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&alternatives=true`;
   
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000); // 3 second timeout
@@ -47,7 +47,7 @@ export async function getRoute(
       distanceKm: route.distance / 1000,
       durationMinutes: route.duration / 60,
       detourMinutes: 0, // Direct route has 0 detour
-      geometry: [], // In a real app we decode the polyline here, skipping for MVP simplicity
+      geometry: (typeof route.geometry === 'string' ? route.geometry : []) as any,
     };
 
     // Cache successful route result

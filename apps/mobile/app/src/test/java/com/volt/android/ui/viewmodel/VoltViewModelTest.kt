@@ -94,4 +94,17 @@ class VoltViewModelTest {
         viewModel.dismissRerouteAlert()
         assertNull(repository.rerouteAlert.value)
     }
+
+    @Test
+    fun startAndStopTripNavigation_updatesNavigatingState() = runTest {
+        assertFalse(viewModel.isNavigating.value)
+        assertNull(viewModel.userLocation.value)
+
+        viewModel.startTripNavigation()
+        assertTrue(viewModel.isNavigating.value)
+
+        viewModel.stopTripNavigation()
+        assertFalse(viewModel.isNavigating.value)
+        assertNull(viewModel.userLocation.value)
+    }
 }

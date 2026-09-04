@@ -90,6 +90,8 @@ fun TripPlannerScreen(
     onAcceptReroute: (String) -> Unit = {},
     onDismissReroute: () -> Unit = {},
     onTriggerSimulatedReroute: () -> Unit = {},
+    onStartNavigation: () -> Unit = {},
+    onStopNavigation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var originInput by remember { mutableStateOf(uiState.tripPlan.origin) }
@@ -379,27 +381,57 @@ fun TripPlannerScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.Map,
-                    contentDescription = "Map",
-                    tint = VoltCyan,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Route Visualization",
-                    color = VoltTextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Map,
+                        contentDescription = "Map",
+                        tint = VoltCyan,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Route Visualization",
+                        color = VoltTextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (uiState.isNavigating) onStopNavigation() else onStartNavigation()
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (uiState.isNavigating) VoltAmber.copy(alpha = 0.2f) else VoltCyan.copy(alpha = 0.2f)
+                    ),
+                    border = BorderStroke(1.dp, if (uiState.isNavigating) VoltAmber else VoltCyan),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = if (uiState.isNavigating) Icons.Default.Warning else Icons.Default.Navigation,
+                        contentDescription = "Nav",
+                        tint = if (uiState.isNavigating) VoltAmber else VoltCyan,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (uiState.isNavigating) "Stop GPS Tracking" else "Start Live GPS",
+                        color = if (uiState.isNavigating) VoltAmber else VoltCyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
 
             VoltMapView(
                 routePoints = routePoints,
                 markers = mapMarkers,
+                userLocation = uiState.userLocation,
                 mapHeight = 280.dp
             )
 

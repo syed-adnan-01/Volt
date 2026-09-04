@@ -28,3 +28,15 @@ export interface OptimizerResult {
   /** Human-readable explanation for the recommendation */
   reason: string;
 }
+
+export interface RouteStrategyContract {
+  id: string;
+  title: string;
+  tag: string;
+  totalTimeMinutes: number;
+  driveTimeMinutes: number;
+  chargeTimeMinutes: number;
+  arrivalSoc: number;
+  energyKwh: number;
+  whyExplanation: string;
+}

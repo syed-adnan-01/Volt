@@ -199,7 +199,29 @@ class VoltRepository {
                         )
                     )
                     _activeTripPlan.value = livePlan
-                    _routeStrategies.value = generateRouteStrategies(livePlan, currentVehicle)
+                    val backendStrategies = dto.strategies.map { s ->
+                        RouteStrategy(
+                            id = s.id,
+                            title = s.title,
+                            tag = s.tag,
+                            totalTimeMinutes = s.totalTimeMinutes,
+                            driveTimeMinutes = s.driveTimeMinutes,
+                            chargeTimeMinutes = s.chargeTimeMinutes,
+                            arrivalSoC = s.arrivalSoc,
+                            energyKWh = s.energyKwh,
+                            whyExplanation = s.whyExplanation,
+                            plan = livePlan.copy(
+                                totalChargingTimeMinutes = s.chargeTimeMinutes,
+                                arrivalSoC = s.arrivalSoc,
+                                energyRequiredKWh = s.energyKwh
+                            )
+                        )
+                    }
+                    if (backendStrategies.isNotEmpty()) {
+                        _routeStrategies.value = backendStrategies
+                    } else {
+                        _routeStrategies.value = generateRouteStrategies(livePlan, currentVehicle)
+                    }
                 } else {
                     val fallbackPlan = calculateTrip(origin, destination, distanceKm, currentVehicle)
                     _activeTripPlan.value = fallbackPlan
@@ -234,7 +256,7 @@ class VoltRepository {
             chargeTimeMinutes = totalChargeTime,
             arrivalSoC = plan.arrivalSoC,
             energyKWh = baseEnergy,
-            whyExplanation = "Minimum total travel time with a safe ${(plan.safetyMarginPercent).toInt()}% reserve buffer above the 10% safety margin.",
+            whyExplanation = "Minimum total travel time with a safe ${(plan.safetyMarginPercent).toInt()}% reserve buffer above the ${vehicle.reserveSocPercent.toInt()}% reserve threshold.",
             plan = plan
         )
 
@@ -250,13 +272,13 @@ class VoltRepository {
             chargeTimeMinutes = fastChargeTime,
             arrivalSoC = (fastestArrivalSoC * 10.0).roundToInt() / 10.0,
             energyKWh = baseEnergy,
-            whyExplanation = "Charges up to 70% SoC at 250kW+ HyperCharge stations to exploit the fastest segment of the vehicle charging curve.",
+            whyExplanation = "Optimizes charging stop duration by targeting peak power curve segments and minimizing total dwell time.",
             plan = plan.copy(
                 totalChargingTimeMinutes = fastChargeTime,
                 arrivalSoC = fastestArrivalSoC,
                 recommendations = listOf(
-                    "Charges at peak 250kW power band.",
-                    "Unplugs at 70% to avoid slow charging taper segment."
+                    "Charges at peak available power band.",
+                    "Minimizes charging dwell time to speed up overall arrival."
                 )
             )
         )
@@ -273,7 +295,7 @@ class VoltRepository {
             chargeTimeMinutes = safeChargeTime,
             arrivalSoC = (safeArrivalSoC * 10.0).roundToInt() / 10.0,
             energyKWh = (baseEnergy * 0.95 * 10.0).roundToInt() / 10.0,
-            whyExplanation = "Protects battery health by keeping cell temperatures stable and arriving with a generous ${(safeArrivalSoC - 10.0).toInt()}% safety margin.",
+            whyExplanation = "Prioritizes battery preservation with gentler charge rates and a higher ${(safeArrivalSoC).toInt()}% arrival reserve SoC.",
             plan = plan.copy(
                 totalChargingTimeMinutes = safeChargeTime,
                 arrivalSoC = safeArrivalSoC,
@@ -370,16 +392,22 @@ class VoltRepository {
                                     status = c.status
                                 )
                             }
+                            if (dto.operator == null) {
+                                android.util.Log.w("StationMapping", "Station ${dto.id} '${dto.name}' has null operator from API, defaulting to 'Open Network'")
+                            }
+                            val powerKw = dto.powerKw ?: (connectors.maxOfOrNull { it.powerKw } ?: 150.0).toInt()
+                            val availablePlugs = dto.availablePlugs ?: connectors.count { it.status == "available" }
+                            val totalPlugs = dto.totalPlugs ?: connectors.size.coerceAtLeast(1)
                             ChargingStation(
                                 id = dto.id,
                                 name = dto.name,
                                 operator = dto.operator ?: "Open Network",
                                 address = dto.address ?: "Nearby",
-                                powerKw = (connectors.maxOfOrNull { it.powerKw } ?: 150.0).toInt(),
-                                isFastCharger = (connectors.maxOfOrNull { it.powerKw } ?: 0.0) >= 100.0,
+                                powerKw = powerKw,
+                                isFastCharger = powerKw >= 100,
                                 connectors = connectors,
-                                availablePlugs = connectors.count { it.status == "available" },
-                                totalPlugs = connectors.size.coerceAtLeast(1),
+                                availablePlugs = availablePlugs,
+                                totalPlugs = totalPlugs,
                                 pricePerKWh = 0.35,
                                 distanceKm = ((dto.distanceMeters ?: 2000.0) / 1000.0 * 10.0).roundToInt() / 10.0,
                                 latitude = dto.latitude,
