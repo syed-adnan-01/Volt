@@ -7,37 +7,6 @@ import { create } from 'zustand';
 import { getVehicles, createVehicle, deleteVehicle, type Vehicle, type CreateVehicleInput } from '@/api/vehicles';
 import { useAuthStore } from './authStore';
 
-const MOCK_DEFAULT_VEHICLES: Vehicle[] = [
-  {
-    id: 'demo-v-1',
-    user_id: 'demo-user-1',
-    make: 'Tesla',
-    model: 'Model 3 Long Range',
-    battery_capacity_kwh: 75,
-    usable_capacity_kwh: 72.5,
-    consumption_kwh_per_km: 0.16,
-    max_charging_power_kw: 250,
-    battery_health_percent: 96,
-    reserve_soc_percent: 10,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'demo-v-2',
-    user_id: 'demo-user-1',
-    make: 'Hyundai',
-    model: 'IONIQ 5',
-    battery_capacity_kwh: 77.4,
-    usable_capacity_kwh: 74,
-    consumption_kwh_per_km: 0.18,
-    max_charging_power_kw: 220,
-    battery_health_percent: 98,
-    reserve_soc_percent: 10,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
-
 interface VehicleState {
   /** All user vehicles */
   vehicles: Vehicle[];
@@ -61,8 +30,8 @@ interface VehicleState {
 }
 
 export const useVehicleStore = create<VehicleState>((set, get) => ({
-  vehicles: MOCK_DEFAULT_VEHICLES,
-  selectedVehicle: MOCK_DEFAULT_VEHICLES[0],
+  vehicles: [],
+  selectedVehicle: null,
   simulatedSoC: 80,
   loading: false,
 
