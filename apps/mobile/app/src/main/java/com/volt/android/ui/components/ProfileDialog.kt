@@ -59,7 +59,8 @@ fun ProfileDialog(
     selectedVehicle: VehicleProfile,
     onDismiss: () -> Unit,
     onSignOut: () -> Unit,
-    onSwitchAccount: () -> Unit
+    onSwitchAccount: () -> Unit,
+    onManageGarage: () -> Unit = {}
 ) {
     val displayName = user?.name ?: "Guest Pilot"
     val email = user?.email ?: "driver@volt.app"
@@ -224,7 +225,32 @@ fun ProfileDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // My Garage button
+                androidx.compose.material3.Button(
+                    onClick = {
+                        onDismiss()
+                        onManageGarage()
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = VoltCyan.copy(alpha = 0.15f)
+                    ),
+                    border = BorderStroke(1.dp, VoltCyan.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.DirectionsCar,
+                        contentDescription = null,
+                        tint = VoltCyan,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("My Garage", color = VoltCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Switch Account & Sign Out Actions
                 Row(

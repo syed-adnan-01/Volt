@@ -38,6 +38,7 @@ enum class VoltNavTab {
 data class VoltUiState(
     val selectedVehicle: VehicleProfile,
     val allVehicles: List<VehicleProfile>,
+    val garageVehicles: List<VehicleProfile> = emptyList(),
     val telemetry: BatteryTelemetry,
     val stations: List<ChargingStation>,
     val tripPlan: TripPlanResult,
@@ -61,6 +62,9 @@ class VoltViewModel(
     private val repository: VoltRepository = VoltRepository(),
     private val locationTracker: LiveLocationTracker? = null
 ) : ViewModel() {
+
+    /** Full Indian EV catalog for the vehicle picker UI */
+    val catalogVehicles: List<VehicleProfile> get() = repository.catalogVehicles
 
     private val _currentTab = MutableStateFlow(VoltNavTab.DASHBOARD)
     val currentTab: StateFlow<VoltNavTab> = _currentTab.asStateFlow()
@@ -92,6 +96,10 @@ class VoltViewModel(
         }
     }
 
+    fun initGarage(context: android.content.Context) {
+        repository.initGarage(context)
+    }
+
     private val _filteredStations = combine(
         repository.stations,
         _filterFastOnly,
@@ -106,53 +114,53 @@ class VoltViewModel(
         combine(
             repository.selectedVehicle,
             repository.vehicles,
+            repository.garageVehicles,
             repository.telemetry,
             _filteredStations,
             repository.activeTripPlan,
             repository.routeStrategies,
-            repository.selectedStrategyId,
-            repository.rerouteAlert
-        ) { p1 -> p1 },
+            repository.selectedStrategyId
+        ) { arr -> arr },
         combine(
+            repository.rerouteAlert,
             _currentTab,
             repository.isLoading,
             repository.networkError,
             AuthSessionManager.currentUser,
             AuthSessionManager.isAuthenticated,
-            _isAuthLoading,
-            _authError
-        ) { p2 -> p2 },
-        combine(
-            _isNavigating,
-            _userLocation
-        ) { p3 -> p3 }
+            _isAuthLoading
+        ) { arr -> arr },
+        combine(_authError, _isNavigating, _userLocation) { arr -> arr }
     ) { p1, p2, p3 ->
-        val vehicle = p1[0] as VehicleProfile
+        val vehicle    = p1[0] as VehicleProfile
         @Suppress("UNCHECKED_CAST")
         val allVehicles = p1[1] as List<VehicleProfile>
-        val telemetry = p1[2] as BatteryTelemetry
         @Suppress("UNCHECKED_CAST")
-        val stations = p1[3] as List<ChargingStation>
-        val tripPlan = p1[4] as TripPlanResult
+        val garageVehicles = p1[2] as List<VehicleProfile>
+        val telemetry  = p1[3] as BatteryTelemetry
         @Suppress("UNCHECKED_CAST")
-        val strategies = p1[5] as List<RouteStrategy>
-        val strategyId = p1[6] as String
-        val reroute = p1[7] as RerouteAlert?
+        val stations   = p1[4] as List<ChargingStation>
+        val tripPlan   = p1[5] as TripPlanResult
+        @Suppress("UNCHECKED_CAST")
+        val strategies = p1[6] as List<RouteStrategy>
+        val strategyId = p1[7] as String
 
-        val tab = p2[0] as VoltNavTab
-        val loading = p2[1] as Boolean
-        val netError = p2[2] as String?
-        val user = p2[3] as UserProfile?
-        val authed = p2[4] as Boolean
-        val authLoading = p2[5] as Boolean
-        val authErr = p2[6] as String?
+        val reroute    = p2[0] as RerouteAlert?
+        val tab        = p2[1] as VoltNavTab
+        val loading    = p2[2] as Boolean
+        val netError   = p2[3] as String?
+        val user       = p2[4] as UserProfile?
+        val authed     = p2[5] as Boolean
+        val authLoading = p2[6] as Boolean
 
-        val isNav = p3[0] as Boolean
-        val userLoc = p3[1] as LatLng?
+        val authErr    = p3[0] as String?
+        val isNav      = p3[1] as Boolean
+        val userLoc    = p3[2] as LatLng?
 
         VoltUiState(
             selectedVehicle = vehicle,
             allVehicles = allVehicles,
+            garageVehicles = garageVehicles,
             telemetry = telemetry,
             stations = stations,
             tripPlan = tripPlan,
@@ -177,6 +185,7 @@ class VoltViewModel(
         initialValue = VoltUiState(
             selectedVehicle = repository.sampleVehicles[0],
             allVehicles = repository.sampleVehicles,
+            garageVehicles = repository.garageVehicles.value,
             telemetry = repository.telemetry.value,
             stations = repository.stations.value,
             tripPlan = repository.activeTripPlan.value,
@@ -291,6 +300,19 @@ class VoltViewModel(
 
     fun selectVehicle(vehicle: VehicleProfile) {
         repository.selectVehicle(vehicle)
+    }
+
+    // ── Garage actions ────────────────────────────────────────────────────────
+    fun addVehicle(vehicle: VehicleProfile) {
+        repository.addVehicleToGarage(vehicle)
+    }
+
+    fun removeVehicle(vehicleId: String) {
+        repository.removeVehicleFromGarage(vehicleId)
+    }
+
+    fun setActiveVehicle(vehicle: VehicleProfile) {
+        repository.setActiveVehicle(vehicle)
     }
 
     fun selectStrategy(strategyId: String) {

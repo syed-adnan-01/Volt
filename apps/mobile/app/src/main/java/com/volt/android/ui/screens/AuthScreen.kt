@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import com.volt.android.data.IndianEvCatalog
 import com.volt.android.data.models.AuthTab
 import com.volt.android.data.models.VehicleProfile
 import com.volt.android.ui.theme.VoltAmber
@@ -85,6 +86,8 @@ import com.volt.android.ui.theme.VoltCardElevated
 import com.volt.android.ui.theme.VoltCyan
 import com.volt.android.ui.theme.VoltDarkBg
 import com.volt.android.ui.theme.VoltEmerald
+import com.volt.android.ui.theme.VoltGradientEnd
+import com.volt.android.ui.theme.VoltGradientStart
 import com.volt.android.ui.theme.VoltPurple
 import com.volt.android.ui.theme.VoltRose
 import com.volt.android.ui.theme.VoltTextMuted
@@ -108,7 +111,13 @@ fun AuthScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var selectedVehicleId by remember { mutableStateOf(vehicles.firstOrNull()?.id ?: "v1") }
+    var selectedVehicle by remember {
+        mutableStateOf<VehicleProfile?>(vehicles.firstOrNull())
+    }
+    var selectedVehicleId by remember {
+        mutableStateOf(vehicles.firstOrNull()?.id ?: IndianEvCatalog.tataNexonEVLong.id)
+    }
+    var showVehiclePicker by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
@@ -467,7 +476,7 @@ fun AuthScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Vehicle Selection for Sign Up
+                    // Vehicle Selection for Sign Up — tap to open picker
                     AnimatedVisibility(
                         visible = selectedTab == AuthTab.SIGN_UP,
                         enter = fadeIn(),
@@ -476,7 +485,7 @@ fun AuthScreen(
                         Column {
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "SELECT YOUR PRIMARY EV",
+                                text = "YOUR EV VEHICLE",
                                 color = VoltCyan,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -484,50 +493,85 @@ fun AuthScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
+                            val displayVehicle = selectedVehicle
+                                ?: IndianEvCatalog.allVehicles.find { it.id == selectedVehicleId }
+                                ?: IndianEvCatalog.tataNexonEVLong
+
+                            // Selected vehicle card — tap to change
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(VoltCyan.copy(alpha = 0.08f))
+                                    .border(1.dp, VoltCyan.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                                    .clickable { showVehiclePicker = true }
+                                    .padding(14.dp)
                             ) {
-                                items(vehicles) { v ->
-                                    val isSelected = v.id == selectedVehicleId
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
                                     Box(
                                         modifier = Modifier
+                                            .size(44.dp)
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isSelected) VoltCyan.copy(alpha = 0.18f) else VoltCardElevated)
-                                            .border(
-                                                1.dp,
-                                                if (isSelected) VoltCyan else VoltCardBorder,
-                                                RoundedCornerShape(12.dp)
-                                            )
-                                            .clickable { selectedVehicleId = v.id }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                            .background(VoltCardElevated),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = if (isSelected) Icons.Default.Check else Icons.Default.DirectionsCar,
-                                                contentDescription = null,
-                                                tint = if (isSelected) VoltCyan else VoltTextSecondary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Column {
-                                                Text(
-                                                    text = "${v.make} ${v.model}",
-                                                    color = if (isSelected) VoltCyan else VoltTextPrimary,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    text = "${v.batteryCapacityKWh} kWh",
-                                                    color = VoltTextMuted,
-                                                    fontSize = 10.sp
-                                                )
-                                            }
-                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.DirectionsCar,
+                                            contentDescription = null,
+                                            tint = VoltCyan,
+                                            modifier = Modifier.size(24.dp)
+                                        )
                                     }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${displayVehicle.make} ${displayVehicle.model}",
+                                            color = VoltTextPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "${displayVehicle.batteryCapacityKWh.toInt()} kWh · ~${IndianEvCatalog.araiRange(displayVehicle)} km ARAI · ${displayVehicle.maxChargingPowerKw.toInt()} kW max",
+                                            color = VoltTextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Change",
+                                        tint = VoltCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Tap to select from 30+ Indian EVs",
+                                color = VoltTextMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showVehiclePicker = true },
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
                         }
+                    }
+
+                    // Vehicle Picker Bottom Sheet
+                    if (showVehiclePicker) {
+                        VehiclePickerSheet(
+                            currentVehicleIds = emptySet(),
+                            onVehicleSelected = { v ->
+                                selectedVehicle = v
+                                selectedVehicleId = v.id
+                                showVehiclePicker = false
+                            },
+                            onDismiss = { showVehiclePicker = false }
+                        )
                     }
 
                     // Error Message Banner

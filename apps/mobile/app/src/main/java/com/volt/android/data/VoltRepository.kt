@@ -1,5 +1,7 @@
 package com.volt.android.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import com.google.android.gms.maps.model.LatLng
 import com.volt.android.BuildConfig
 import com.volt.android.data.models.BatteryResult
@@ -22,66 +24,117 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 class VoltRepository {
 
+    // ── Catalog of all available Indian EV vehicles ───────────────────────────
+    /** Full Indian EV catalog used by the vehicle picker (registration + garage). */
+    val catalogVehicles: List<VehicleProfile> get() = IndianEvCatalog.allVehicles
+
+    /** The 4 legacy sample vehicles — kept as defaults when no garage vehicle is selected. */
     val sampleVehicles = listOf(
-        VehicleProfile(
-            id = "v1",
-            make = "Tesla",
-            model = "Model 3",
-            trim = "Long Range AWD",
-            batteryCapacityKWh = 75.0,
-            usableCapacityKWh = 72.0,
-            consumptionKWhPerKm = 0.150,
-            maxChargingPowerKw = 250.0,
-            currentSoC = 78.0,
-            batteryHealthPercent = 97.4,
-            reserveSocPercent = 10.0
-        ),
-        VehicleProfile(
-            id = "v2",
-            make = "Hyundai",
-            model = "Ioniq 5",
-            trim = "Long Range RWD",
-            batteryCapacityKWh = 77.4,
-            usableCapacityKWh = 74.0,
-            consumptionKWhPerKm = 0.168,
-            maxChargingPowerKw = 230.0,
-            currentSoC = 64.0,
-            batteryHealthPercent = 98.2,
-            reserveSocPercent = 10.0
-        ),
-        VehicleProfile(
-            id = "v3",
-            make = "Porsche",
-            model = "Taycan",
-            trim = "Performance Plus 4S",
-            batteryCapacityKWh = 93.4,
-            usableCapacityKWh = 88.0,
-            consumptionKWhPerKm = 0.210,
-            maxChargingPowerKw = 270.0,
-            currentSoC = 85.0,
-            batteryHealthPercent = 96.1,
-            reserveSocPercent = 12.0
-        ),
-        VehicleProfile(
-            id = "v4",
-            make = "Tata",
-            model = "Nexon EV",
-            trim = "Empowered+ Long Range",
-            batteryCapacityKWh = 40.5,
-            usableCapacityKWh = 38.0,
-            consumptionKWhPerKm = 0.135,
-            maxChargingPowerKw = 50.0,
-            currentSoC = 52.0,
-            batteryHealthPercent = 99.0,
-            reserveSocPercent = 10.0
-        )
+        IndianEvCatalog.tataNexonEVLong,
+        IndianEvCatalog.hyundaiCretaEV,
+        IndianEvCatalog.tataCurvvEV,
+        IndianEvCatalog.mahindraXev9e
     )
+
+    // ── Garage persistence (SharedPreferences) ────────────────────────────────
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+    private var prefs: SharedPreferences? = null
+    private val PREFS_GARAGE = "volt_garage_prefs"
+    private val KEY_GARAGE   = "garage_vehicles"
+    private val KEY_ACTIVE   = "active_vehicle_id"
+
+    fun initGarage(context: Context) {
+        prefs = context.applicationContext.getSharedPreferences(PREFS_GARAGE, Context.MODE_PRIVATE)
+        loadGarageFromPrefs()
+    }
+
+    private fun loadGarageFromPrefs() {
+        val p = prefs ?: return
+        try {
+            val raw = p.getString(KEY_GARAGE, null)
+            if (!raw.isNullOrBlank()) {
+                val saved = json.decodeFromString<List<VehicleProfile>>(raw)
+                if (saved.isNotEmpty()) {
+                    _garageVehicles.value = saved
+                    val activeId = p.getString(KEY_ACTIVE, null)
+                    val active = saved.find { it.id == activeId } ?: saved.first()
+                    _selectedVehicle.value = active
+                    _vehicles.value = saved
+                    _telemetry.value = createInitialTelemetry(active)
+                    return
+                }
+            }
+        } catch (_: Exception) {}
+        // First run: start with empty garage
+        _garageVehicles.value = emptyList()
+    }
+
+    private fun saveGarageToPrefs() {
+        val p = prefs ?: return
+        try {
+            val encoded = json.encodeToString(_garageVehicles.value)
+            p.edit()
+                .putString(KEY_GARAGE, encoded)
+                .putString(KEY_ACTIVE, _selectedVehicle.value.id)
+                .apply()
+        } catch (_: Exception) {}
+    }
+
+    // ── Garage StateFlow ──────────────────────────────────────────────────────
+    private val _garageVehicles = MutableStateFlow<List<VehicleProfile>>(emptyList())
+    val garageVehicles: StateFlow<List<VehicleProfile>> = _garageVehicles.asStateFlow()
+
+    fun addVehicleToGarage(vehicle: VehicleProfile) {
+        if (_garageVehicles.value.any { it.id == vehicle.id }) return
+        val updated = _garageVehicles.value + vehicle
+        _garageVehicles.value = updated
+        _vehicles.value = updated
+        // If this is the first vehicle, select it automatically
+        if (updated.size == 1) {
+            _selectedVehicle.value = vehicle
+            _telemetry.value = createInitialTelemetry(vehicle)
+        }
+        saveGarageToPrefs()
+    }
+
+    fun removeVehicleFromGarage(vehicleId: String) {
+        val updated = _garageVehicles.value.filter { it.id != vehicleId }
+        _garageVehicles.value = updated
+        _vehicles.value = updated.ifEmpty { sampleVehicles }
+        // If the removed vehicle was active, switch to first available
+        if (_selectedVehicle.value.id == vehicleId) {
+            val fallback = updated.firstOrNull() ?: sampleVehicles.first()
+            _selectedVehicle.value = fallback
+            _telemetry.value = createInitialTelemetry(fallback)
+        }
+        saveGarageToPrefs()
+    }
+
+    fun setActiveVehicle(vehicle: VehicleProfile) {
+        if (_garageVehicles.value.none { it.id == vehicle.id }) {
+            addVehicleToGarage(vehicle)
+        } else {
+            _selectedVehicle.value = vehicle
+            _telemetry.value = createInitialTelemetry(vehicle)
+            saveGarageToPrefs()
+        }
+    }
+
+    fun clearGarage() {
+        _garageVehicles.value = emptyList()
+        _vehicles.value = sampleVehicles
+        _selectedVehicle.value = sampleVehicles.first()
+        _telemetry.value = createInitialTelemetry(sampleVehicles.first())
+        prefs?.edit()?.clear()?.apply()
+    }
 
     private val _vehicles = MutableStateFlow(sampleVehicles)
     val vehicles: StateFlow<List<VehicleProfile>> = _vehicles.asStateFlow()

@@ -60,6 +60,12 @@ fun VoltMainApp(
     val locationTracker = remember(context) { LiveLocationTracker(context) }
     val uiState by viewModel.uiState.collectAsState()
     var showProfileDialog by remember { mutableStateOf(false) }
+    var showGarageScreen by remember { mutableStateOf(false) }
+
+    // Initialize garage (load persisted vehicles) once on startup
+    LaunchedEffect(Unit) {
+        viewModel.initGarage(context)
+    }
 
     // Auto-fetch real nearby stations when the Chargers tab is first opened
     LaunchedEffect(uiState.currentTab) {
@@ -71,9 +77,22 @@ fun VoltMainApp(
     // ──────────────────────────────────────────────
     // 1. Show AuthScreen if not authenticated
     // ──────────────────────────────────────────────
+    // Show Garage Screen (full-screen modal)
+    if (showGarageScreen) {
+        GarageScreen(
+            garageVehicles = uiState.garageVehicles,
+            activeVehicle = uiState.selectedVehicle,
+            onSetActive = { vehicle -> viewModel.setActiveVehicle(vehicle) },
+            onAddVehicle = { vehicle -> viewModel.addVehicle(vehicle) },
+            onRemoveVehicle = { id -> viewModel.removeVehicle(id) },
+            onDismiss = { showGarageScreen = false }
+        )
+        return
+    }
+
     if (!uiState.isAuthenticated) {
         AuthScreen(
-            vehicles = uiState.allVehicles,
+            vehicles = viewModel.catalogVehicles,
             isLoading = uiState.isAuthLoading,
             errorMessage = uiState.authError,
             onSignIn = { email, password ->
@@ -81,6 +100,9 @@ fun VoltMainApp(
             },
             onSignUp = { name, email, password, vehicleId ->
                 viewModel.signUp(name, email, password, vehicleId)
+                // After sign-up, add selected vehicle to garage automatically
+                val picked = viewModel.catalogVehicles.find { it.id == vehicleId }
+                if (picked != null) viewModel.addVehicle(picked)
             },
             onGoogleSignInSuccess = { name, email, idToken ->
                 viewModel.onGoogleSignInResult(name, email, idToken)
@@ -110,6 +132,9 @@ fun VoltMainApp(
             onSwitchAccount = {
                 showProfileDialog = false
                 viewModel.logout()
+            },
+            onManageGarage = {
+                showGarageScreen = true
             }
         )
     }
