@@ -2,6 +2,7 @@ services:
   - type: redis
     name: volt-redis
     plan: free
+    ipAllowList: []
 
   - type: web
     name: volt-prediction-service
@@ -11,7 +12,7 @@ services:
     plan: free
     envVars:
       - key: PORT
-        value: 8000
+        value: "8000"
 
   - type: web
     name: volt-routing-service
@@ -21,7 +22,7 @@ services:
     plan: free
     envVars:
       - key: PORT
-        value: 3001
+        value: "3001"
       - key: NODE_ENV
         value: production
 
@@ -33,7 +34,7 @@ services:
     plan: free
     envVars:
       - key: PORT
-        value: 3000
+        value: "3000"
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
@@ -46,15 +47,9 @@ services:
           name: volt-redis
           property: connectionString
       - key: ML_API_URL
-        fromService:
-          type: web
-          name: volt-prediction-service
-          property: url
+        value: http://volt-prediction-service:8000
       - key: OPTIMIZER_SERVICE_URL
-        fromService:
-          type: web
-          name: volt-routing-service
-          property: url
+        value: http://volt-routing-service:3001
       - key: OSRM_BASE_URL
         value: https://router.project-osrm.org
 
