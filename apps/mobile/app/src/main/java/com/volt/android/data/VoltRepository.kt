@@ -776,7 +776,7 @@ class VoltRepository {
                 add("Direct route feasible — no charging stops needed.")
                 if (arrivalSoC < 20.0) add("⚠️ Arrival battery is under 20%. Consider destination charging.")
                 else add("✅ Safe arrival buffer of ${(safetyMargin).roundToInt()}% above reserve.")
-                add("Battery: ${currentSoC.roundToInt()}% → ${arrivalSoC.roundToInt()}% (${totalEnergyRequiredKWh.roundToInt()} kWh consumed)")
+                add("Battery Flow: ${currentSoC.roundToInt()}% (Start) ➔ ${arrivalSoC.roundToInt()}% (Destination Arrival)")
             }
             
             val batteryResult = BatteryResult(
@@ -794,9 +794,6 @@ class VoltRepository {
                 finalSoc = (arrivalSoC * 10.0).roundToInt() / 10.0
             )
 
-            // Use OSRM geometry if provided; do NOT call generateFallbackPolyline here
-            // (that function draws a straight line). A null geometry means the map UI will
-            // skip drawing the polyline rather than draw a fake straight line.
             val resolvedGeometry = geometry
 
             return TripPlanResult(
@@ -818,20 +815,27 @@ class VoltRepository {
                 recommendations = recommendations
             )
         } else {
-            // Calculate optimal charging stop position along the route
-            val stopFraction = 0.55
-            val stopDistanceKm = distanceKm * stopFraction
+            // Calculate optimal charging stop position based on starting SoC and reserve buffer
+            val usableStartingEnergyKWh = startingEnergyKWh - (vehicle.batteryCapacityKWh * (vehicle.reserveSocPercent / 100.0))
+            
+            val stopDistanceKm = if (usableStartingEnergyKWh <= 0) {
+                min(10.0, distanceKm * 0.1)
+            } else {
+                val maxInitialDriveKm = (usableStartingEnergyKWh * 1000.0) / consumptionRate
+                min(distanceKm * 0.8, maxInitialDriveKm * 0.85).coerceAtLeast(min(15.0, distanceKm * 0.15))
+            }
+
+            val stopFraction = if (distanceKm > 0) (stopDistanceKm / distanceKm).coerceIn(0.05, 0.95) else 0.55
             val leg1Energy = (stopDistanceKm * consumptionRate) / 1000.0
-            val chargerArrivalSoC = max(8.0, ((startingEnergyKWh - leg1Energy) / vehicle.batteryCapacityKWh) * 100.0)
-            
+            val chargerArrivalSoC = max(2.0, ((startingEnergyKWh - leg1Energy) / vehicle.batteryCapacityKWh) * 100.0)
+
             val targetSoC = 80.0
-            val energyToAddKWh = ((targetSoC - chargerArrivalSoC) / 100.0) * vehicle.batteryCapacityKWh
-            val chargingTimeMins = ((energyToAddKWh / min(150.0, vehicle.maxChargingPowerKw)) * 60.0 * 1.15).roundToInt()
-            
+            val energyToAddKWh = max(0.0, ((targetSoC - chargerArrivalSoC) / 100.0) * vehicle.batteryCapacityKWh)
+
             val leg2DistanceKm = distanceKm - stopDistanceKm
             val leg2Energy = (leg2DistanceKm * consumptionRate) / 1000.0
             val leg2StartingEnergy = (targetSoC / 100.0) * vehicle.batteryCapacityKWh
-            val arrivalSoC = ((leg2StartingEnergy - leg2Energy) / vehicle.batteryCapacityKWh) * 100.0
+            val arrivalSoC = max(0.0, ((leg2StartingEnergy - leg2Energy) / vehicle.batteryCapacityKWh) * 100.0)
 
             val idealLat = if (originLat != 0.0 && destLat != 0.0) {
                 originLat + (destLat - originLat) * stopFraction
@@ -840,15 +844,19 @@ class VoltRepository {
                 originLng + (destLng - originLng) * stopFraction
             } else null
 
-            // Find closest real-world EV charging station from database along the corridor
-            val candidateStations = _stations.value.ifEmpty { sampleStations }
-            val matchedStation = if (idealLat != null && idealLng != null) {
-                candidateStations.filter { it.latitude != null && it.longitude != null }
-                    .minByOrNull { s ->
-                        val dLat = s.latitude!! - idealLat
-                        val dLng = s.longitude!! - idealLng
-                        dLat * dLat + dLng * dLng
-                    }
+            // Find closest real operational EV station (filtering out mock sample stations)
+            val realCandidateStations = _stations.value.filter {
+                it.latitude != null && it.longitude != null && !it.id.startsWith("st-")
+            }.ifEmpty {
+                _stations.value.filter { it.latitude != null && it.longitude != null }
+            }
+
+            val matchedStation = if (idealLat != null && idealLng != null && realCandidateStations.isNotEmpty()) {
+                realCandidateStations.minByOrNull { s ->
+                    val dLat = s.latitude!! - idealLat
+                    val dLng = s.longitude!! - idealLng
+                    dLat * dLat + dLng * dLng
+                }
             } else null
 
             val chosenStation = if (matchedStation != null && idealLat != null && idealLng != null) {
@@ -856,11 +864,11 @@ class VoltRepository {
                 if (distDeg < 3.0) matchedStation else null
             } else null
 
-            val stationName = chosenStation?.let { "${it.operator} — ${it.name}" } ?: "Fast DC EV Charging Hub"
+            val stationName = chosenStation?.let { "${it.operator} — ${it.name}" } ?: "EV Fast Charging Station"
             val stationLat = chosenStation?.latitude ?: idealLat
             val stationLng = chosenStation?.longitude ?: idealLng
             val chargerPower = chosenStation?.powerKw?.toDouble() ?: min(150.0, vehicle.maxChargingPowerKw)
-            val actualChargingMins = ((energyToAddKWh / chargerPower) * 60.0 * 1.15).roundToInt()
+            val actualChargingMins = if (energyToAddKWh > 0) ((energyToAddKWh / chargerPower) * 60.0 * 1.15).roundToInt() else 0
 
             val stops = listOf(
                 RouteStop(origin, StopType.ORIGIN, 0.0, currentSoC, currentSoC,
@@ -869,7 +877,7 @@ class VoltRepository {
                 RouteStop(
                     name = stationName,
                     type = StopType.CHARGER_STOP,
-                    distanceFromOriginKm = stopDistanceKm,
+                    distanceFromOriginKm = (stopDistanceKm * 10.0).roundToInt() / 10.0,
                     arrivalSoC = (chargerArrivalSoC * 10.0).roundToInt() / 10.0,
                     departureSoC = targetSoC,
                     chargeDurationMinutes = actualChargingMins,
@@ -886,9 +894,9 @@ class VoltRepository {
             )
             
             val recommendations = listOf(
-                "🔌 Route optimized with real fast charger: $stationName ($actualChargingMins min).",
-                "⚡ Charges to 80% SoC for optimal battery efficiency.",
-                "🔋 Battery: ${currentSoC.roundToInt()}% → ${chargerArrivalSoC.roundToInt()}% → 80% → ${arrivalSoC.roundToInt()}% at arrival.",
+                "🔌 Charging Stop Required: $stationName at ${(stopDistanceKm).roundToInt()} km ($actualChargingMins min charge).",
+                "⚡ Charges battery to 80% SoC for optimal battery health & efficiency.",
+                "🔋 Battery Flow: ${currentSoC.roundToInt()}% (Start) ➔ ${(chargerArrivalSoC).roundToInt()}% (Charger) ➔ 80% (Charged) ➔ ${(arrivalSoC).roundToInt()}% (Destination).",
                 "📍 Estimated distance: ${distanceKm.roundToInt()} km • Drive time: ${drivingTimeMins} min"
             )
 
@@ -903,13 +911,10 @@ class VoltRepository {
 
             val optimizerData = OptimizerData(
                 totalWaitMinutes = 0.0,
-                totalChargingMinutes = chargingTimeMins,
+                totalChargingMinutes = actualChargingMins,
                 finalSoc = (arrivalSoC * 10.0).roundToInt() / 10.0
             )
 
-            // Use OSRM geometry if provided; do NOT call generateFallbackPolyline here
-            // (that function draws a straight line). The UI will splice in charger stops
-            // using PolylineDecoder.ensurePathVisitsAllStops once real route geometry arrives.
             val resolvedGeometry = geometry
             
             return TripPlanResult(
@@ -918,7 +923,7 @@ class VoltRepository {
                 destination = destination,
                 distanceKm = distanceKm,
                 durationMinutes = drivingTimeMins,
-                totalChargingTimeMinutes = chargingTimeMins,
+                totalChargingTimeMinutes = actualChargingMins,
                 energyRequiredKWh = (totalEnergyRequiredKWh * 10.0).roundToInt() / 10.0,
                 arrivalSoC = (arrivalSoC * 10.0).roundToInt() / 10.0,
                 isFeasible = true,
