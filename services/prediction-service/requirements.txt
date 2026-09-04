@@ -10,9 +10,16 @@ cycler==0.12.1
 fastapi==0.141.1
 fonttools==4.64.0
 h11==0.16.0
+h2==4.4.1
+hpack==4.2.0
+httpcore==1.0.9
+httpx==0.28.1
+hyperframe==6.1.0
 idna==3.19
 joblib==1.6.0
+json_repair==0.63.4
 kiwisolver==1.5.1
+lyzr-adk==0.1.12
 matplotlib==3.11.1
 narwhals==2.25.0
 numpy==2.4.6
@@ -24,6 +31,7 @@ pydantic_core==2.46.5
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.3
+PyYAML==6.0.3
 requests==2.34.2
 scikit-learn==1.9.0
 scipy==1.17.1
