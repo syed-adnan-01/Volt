@@ -1,4 +1,8 @@
 services:
+  - type: redis
+    name: volt-redis
+    plan: free
+
   - type: web
     name: volt-prediction-service
     env: docker
@@ -58,8 +62,4 @@ databases:
   - name: volt-db
     databaseName: volt_db
     user: volt_user
-    plan: free
-
-kv:
-  - name: volt-redis
     plan: free
