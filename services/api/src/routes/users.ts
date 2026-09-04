@@ -74,4 +74,61 @@ usersRouter.patch(
   }
 );
 
+// ── Device Token Registration for FCM ─────────
+const deviceTokenSchema = z.object({
+  fcm_token: z.string().min(1),
+  platform: z.enum(['android', 'ios', 'web']).default('android'),
+});
+
+usersRouter.post(
+  '/me/device-token',
+  zValidator('json', deviceTokenSchema),
+  async (c) => {
+    const userContext = c.get('user');
+    const body = c.req.valid('json');
+
+    await query(
+      `INSERT INTO device_tokens (user_id, fcm_token, platform, updated_at)
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (user_id, fcm_token)
+       DO UPDATE SET platform = EXCLUDED.platform, updated_at = now()`,
+      [userContext.id, body.fcm_token, body.platform]
+    );
+
+    return c.json({
+      success: true,
+      data: { registered: true, platform: body.platform },
+      error: null,
+      meta: {
+        requestId: c.get('requestId'),
+        timestamp: new Date().toISOString(),
+      },
+    }, 201);
+  }
+);
+
+usersRouter.delete(
+  '/me/device-token',
+  zValidator('json', z.object({ fcm_token: z.string().min(1) })),
+  async (c) => {
+    const userContext = c.get('user');
+    const body = c.req.valid('json');
+
+    await query(
+      `DELETE FROM device_tokens WHERE user_id = $1 AND fcm_token = $2`,
+      [userContext.id, body.fcm_token]
+    );
+
+    return c.json({
+      success: true,
+      data: { unregistered: true },
+      error: null,
+      meta: {
+        requestId: c.get('requestId'),
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+);
+
 export default usersRouter;

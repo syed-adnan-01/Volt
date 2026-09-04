@@ -1,57 +1,83 @@
 // ──────────────────────────────────────────────
-// Battery Engine Client
-// Communicates with Member 3's Battery API.
+// Battery Engine Client (Member 3 Integration)
+// Connects directly with @volt/battery-engine for
+// reachability, SoC, battery risk, and charging time.
 // ──────────────────────────────────────────────
 
-import { env } from '../config/env.js';
-import { AppError } from '../utils/AppError.js';
-import type { BatteryResult } from '@volt/contracts';
+import {
+  evaluateRouteBattery,
+  evaluateMultiStopRoute,
+  type VehicleBatteryProfile,
+} from '@volt/battery-engine';
+import type { BatteryResult, MultiStopLegInput, MultiStopBatteryResult } from '@volt/contracts';
 
+export interface VehicleProfileInput {
+  vehicleId?: string;
+  name?: string;
+  batteryCapacityKwh?: number;
+  usableCapacityKwh?: number;
+  consumptionKwhPerKm?: number;
+  reserveSoCPercent?: number;
+  batteryHealthPercent?: number;
+  maxChargingPowerKW?: number;
+}
+
+/**
+ * Checks EV battery reachability and arrival SoC for a given route distance
+ * using Member 3's high-precision battery model.
+ */
 export async function checkReachability(
   vehicleId: string,
   currentSoC: number,
-  distanceKm: number
+  distanceKm: number,
+  vehicleProfile?: VehicleProfileInput
 ): Promise<BatteryResult> {
-  const url = `${env.BATTERY_SERVICE_URL}/api/v1/simulate`;
-  
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+  const profile: VehicleBatteryProfile = {
+    vehicleId: vehicleProfile?.vehicleId ?? vehicleId,
+    batteryCapacityKWh: vehicleProfile?.batteryCapacityKwh ?? 82.0,
+    usableBatteryCapacityKWh: vehicleProfile?.usableCapacityKwh ?? 77.0,
+    consumptionKWhPerKm: vehicleProfile?.consumptionKwhPerKm ?? 0.16,
+    reserveSoCPercent: vehicleProfile?.reserveSoCPercent ?? 10.0,
+    batteryHealthPercent: vehicleProfile?.batteryHealthPercent ?? 100.0,
+    maxChargingPowerKW: vehicleProfile?.maxChargingPowerKW ?? 150.0,
+  };
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vehicleId, currentSoC, distanceKm }),
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeout);
+  const evalResult = evaluateRouteBattery({
+    distanceKm,
+    currentSoCPercent: currentSoC,
+    usableCapacityKWh: profile.usableBatteryCapacityKWh,
+    consumptionKWhPerKm: profile.consumptionKWhPerKm,
+    reserveSoCPercent: profile.reserveSoCPercent,
+    batteryHealthPercent: profile.batteryHealthPercent,
+  });
 
-    if (!response.ok) {
-      throw new Error(`Battery service responded with status ${response.status}`);
-    }
+  return {
+    currentSoC,
+    arrivalSoC: evalResult.arrivalSoC,
+    energyRequiredKWh: evalResult.energyRequiredKWh,
+    reachable: evalResult.reachable,
+    riskScore: evalResult.riskScore,
+    safetyMarginPercent: evalResult.safetyMarginPercent,
+  };
+}
 
-    const data = await response.json();
-    return data as BatteryResult;
+/**
+ * Evaluates full battery state transitions across a multi-stop journey.
+ */
+export function evaluateMultiStopBattery(
+  initialSoCPercent: number,
+  legs: MultiStopLegInput[],
+  vehicleProfile?: VehicleProfileInput
+): MultiStopBatteryResult {
+  const profile: VehicleBatteryProfile = {
+    vehicleId: vehicleProfile?.vehicleId ?? 'vehicle-multistop',
+    batteryCapacityKWh: vehicleProfile?.batteryCapacityKwh ?? 82.0,
+    usableBatteryCapacityKWh: vehicleProfile?.usableCapacityKwh ?? 77.0,
+    consumptionKWhPerKm: vehicleProfile?.consumptionKwhPerKm ?? 0.16,
+    reserveSoCPercent: vehicleProfile?.reserveSoCPercent ?? 10.0,
+    batteryHealthPercent: vehicleProfile?.batteryHealthPercent ?? 100.0,
+    maxChargingPowerKW: vehicleProfile?.maxChargingPowerKW ?? 150.0,
+  };
 
-  } catch (error: any) {
-    clearTimeout(timeout);
-    
-    console.warn('⚠️ Battery service failed, using mock data for development.', error.message);
-    
-    // For development (Phase 2), we use a mock linear calculation
-    // Assume 0.15 kWh/km efficiency and 82kWh battery capacity for the mock
-    const energyRequiredKWh = distanceKm * 0.15;
-    const socDrop = (energyRequiredKWh / 82) * 100;
-    const arrivalSoC = currentSoC - socDrop;
-    const reachable = arrivalSoC >= 10.0; // 10% reserve SoC assumption
-
-    return {
-      currentSoC,
-      arrivalSoC: parseFloat(arrivalSoC.toFixed(2)),
-      energyRequiredKWh: parseFloat(energyRequiredKWh.toFixed(2)),
-      reachable,
-      riskScore: reachable ? 0.1 : 0.9,
-    };
-  }
+  return evaluateMultiStopRoute(initialSoCPercent, legs, profile);
 }

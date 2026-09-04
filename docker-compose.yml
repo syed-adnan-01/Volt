@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: volt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: volt_user
+      POSTGRES_PASSWORD: volt_password
+      POSTGRES_DB: volt_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U volt_user -d volt_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: volt-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prediction-service:
+    build:
+      context: .
+      dockerfile: services/prediction-service/Dockerfile
+    container_name: volt-prediction-service
+    restart: unless-stopped
+    ports:
+      - '8000:8000'
+    environment:
+      - PORT=8000
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8000/health")']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  routing-service:
+    build:
+      context: .
+      dockerfile: services/routing-service/Dockerfile
+    container_name: volt-routing-service
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: volt-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      prediction-service:
+        condition: service_started
+      routing-service:
+        condition: service_started
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://volt_user:volt_password@postgres:5432/volt_db
+      - REDIS_URL=redis://redis:6379
+      - ML_API_URL=http://prediction-service:8000
+      - OPTIMIZER_SERVICE_URL=http://routing-service:3001
+      - OSRM_BASE_URL=https://router.project-osrm.org
+      - LOG_LEVEL=info
+
+volumes:
+  postgres_data:
+  redis_data:

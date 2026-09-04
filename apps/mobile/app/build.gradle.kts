@@ -1,7 +1,9 @@
 plugins {
   alias(libs.plugins.android.application)
+  alias(libs.plugins.kotlin.android)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.secrets.gradle.plugin)
 }
 
 android {
@@ -43,6 +45,11 @@ kotlin {
     jvmToolchain(17)
 }
 
+secrets {
+    propertiesFileName = "secrets.properties"
+    defaultPropertiesFileName = "local.defaults.properties"
+}
+
 dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
@@ -71,11 +78,28 @@ dependencies {
   implementation(libs.okhttp.core)
   implementation(libs.okhttp.logging)
 
+  // Firebase & Auth
+  val firebaseBom = platform(libs.firebase.bom)
+  implementation(firebaseBom)
+  implementation(libs.firebase.auth)
+  implementation(libs.firebase.messaging)
+  implementation(libs.play.services.tasks)
+  implementation(libs.play.services.auth)
+  implementation(libs.kotlinx.coroutines.play.services)
+
+  // Google Maps & Location SDK
+  implementation(libs.play.services.maps)
+  implementation(libs.play.services.location)
+  implementation(libs.maps.compose)
+
   // Tooling & Testing
   debugImplementation(libs.androidx.compose.ui.tooling)
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.espresso.core)
+  androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+  debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
 

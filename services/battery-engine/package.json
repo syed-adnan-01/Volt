@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "description": "VOLT Battery & EV Intelligence Engine — Owned by Member 3",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "node --test dist/tests/*.test.js",

@@ -1,0 +1,27 @@
+{
+  "name": "routing-service",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "test": "tsx --test src/tests/evModel.test.ts src/tests/chargerCandidates.test.ts src/tests/singleStopOptimizer.test.ts src/tests/multiStopOptimizer.test.ts src/tests/routePlanner.test.ts src/tests/server.test.ts src/tests/optimizationModes.test.ts src/tests/rerouteOptimizer.test.ts src/tests/chargerFiltering.test.ts src/tests/strategyBenchmark.test.ts src/tests/e2eScenarios.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.2.1"
+  }
+}

@@ -27,19 +27,24 @@ npm-debug.log*
 coverage/
 
 # Docs (keep out of version control)
-Docs/VOLT_In_Depth_Implementation_Plan.md
-Docs/VOLT_Member1_Backend_Implementation_Plan.md
-Docs/VOLT_Updated_System_Architecture_Knowledge_Base.md
-Docs/VOLT_Member_1_Updated_Firebase_Implementation_Plan.md
-Docs/VOLT_Member2_Frontend_Implementation_Plan.md
+VOLT_In_Depth_Implementation_Plan.md
+VOLT_Member1_Backend_Implementation_Plan.md
+VOLT_Updated_System_Architecture_Knowledge_Base.md
+VOLT_Member_1_Updated_Firebase_Implementation_Plan.md
+VOLT_Member2_Frontend_Implementation_Plan.md
+VOLT_Member3_Updated_Machine_Learning_Implementation_Plan.md
+VOLT_Member_4_Implementation_Plan.md
+VOLT_Member_5_Implementation_Plan.md
+VOLT_Member1_Updated_Implementation_Plan.md
+
 
 # Firebase Secrets
 firebase/*.json
 
-# Expo / React Native
+# Expo / React Native root folders (if any)
 .expo/
-ios/
-android/
+/ios/
+/android/
 web-build/
 *.jks
 *.p8
@@ -53,3 +58,14 @@ __pycache__/
 ml/datasets/raw/
 ml/datasets/processed/
 ml/models/prediction_log.csv
+
+# Android / Gradle
+.gradle/
+build/
+.kotlin/
+*.apk
+*.aab
+local.properties
+secrets.properties
+apps/mobile/secrets.properties
+
