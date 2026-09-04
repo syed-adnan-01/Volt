@@ -13,15 +13,9 @@
   "author": "",
   "license": "ISC",
   "description": "",
-  "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
-    "@types/node": "^20.14.0",
-    "tsx": "^4.16.0",
-    "typescript": "^5.5.0"
-  },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "tsx": "^4.16.0"
   }
 }
