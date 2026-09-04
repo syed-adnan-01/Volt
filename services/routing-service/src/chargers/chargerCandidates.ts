@@ -12,7 +12,7 @@ export const chargers: Charger[] = [
   // Bengaluru ➔ Mysuru
   {
     id: "C001",
-    name: "Maddur Tiffany's Charger",
+    name: "Maddur Charger @ Tiffany's",
     lat: 12.5828,
     lon: 77.0447,
     powerKw: 60,

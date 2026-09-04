@@ -13,22 +13,22 @@ export interface RouteCostWeights {
 }
 
 export const DEFAULT_ROUTE_COST_WEIGHTS: RouteCostWeights = {
-  drive: 0.30,
-  detour: 0.10,
-  wait: 0.20,
-  charging: 0.20,
-  risk: 0.10,
-  reliability: 0.10
+  drive: 0.20,
+  detour: 0.05,
+  wait: 0.30,
+  charging: 0.10,
+  risk: 0.15,
+  reliability: 0.20
 };
 
 export const OPTIMIZATION_MODE_WEIGHTS: Record<OptimizationMode, RouteCostWeights> = {
   BALANCED: {
-    drive: 0.30,
-    detour: 0.10,
-    wait: 0.20,
-    charging: 0.20,
-    risk: 0.10,
-    reliability: 0.10
+    drive: 0.20,
+    detour: 0.05,
+    wait: 0.30,
+    charging: 0.10,
+    risk: 0.15,
+    reliability: 0.20
   },
   FASTEST: {
     drive: 0.40,
