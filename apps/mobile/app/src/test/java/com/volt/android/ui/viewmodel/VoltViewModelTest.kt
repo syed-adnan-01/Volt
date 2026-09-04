@@ -43,7 +43,6 @@ class VoltViewModelTest {
         assertEquals("Model 3", state.selectedVehicle.model)
         assertEquals(VoltNavTab.DASHBOARD, state.currentTab)
         assertTrue(state.stations.isNotEmpty())
-        assertTrue(state.routeStrategies.isNotEmpty())
         assertNull(state.rerouteAlert)
     }
 

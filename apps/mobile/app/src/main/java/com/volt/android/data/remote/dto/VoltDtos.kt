@@ -170,12 +170,18 @@ data class RouteStrategyDto(
     @SerialName("id") val id: String,
     @SerialName("title") val title: String,
     @SerialName("tag") val tag: String = "",
+    @SerialName("distance_km") val distanceKm: Double = 0.0,
+    @SerialName("duration_minutes") val durationMinutes: Int = 0,
     @SerialName("total_time_minutes") val totalTimeMinutes: Int = 0,
     @SerialName("drive_time_minutes") val driveTimeMinutes: Int = 0,
     @SerialName("charge_time_minutes") val chargeTimeMinutes: Int = 0,
     @SerialName("arrival_soc") val arrivalSoc: Double = 0.0,
     @SerialName("energy_kwh") val energyKwh: Double = 0.0,
-    @SerialName("why_explanation") val whyExplanation: String = ""
+    @SerialName("why_explanation") val whyExplanation: String = "",
+    @SerialName("battery") val battery: BatteryResultDto? = null,
+    @SerialName("optimizer_data") val optimizerData: OptimizerDataDto? = null,
+    @SerialName("stops") val stops: List<TripStopDto> = emptyList(),
+    @SerialName("geometry") val geometry: String? = null
 )
 
 @Serializable
@@ -211,14 +217,18 @@ data class TripStopDto(
     @SerialName("charging_minutes") val chargingMinutes: Int = 0,
     @SerialName("energy_added_kwh") val energyAddedKwh: Double = 0.0,
     @SerialName("latitude") val latitude: Double? = null,
-    @SerialName("longitude") val longitude: Double? = null
+    @SerialName("longitude") val longitude: Double? = null,
+    @SerialName("power_kw") val powerKw: Double = 0.0
 )
 
 @Serializable
 data class OptimizerDataDto(
     @SerialName("total_wait_minutes") val totalWaitMinutes: Double = 0.0,
     @SerialName("total_charging_minutes") val totalChargingMinutes: Int = 0,
-    @SerialName("final_soc") val finalSoc: Double? = null
+    @SerialName("final_soc") val finalSoc: Double? = null,
+    @SerialName("reason") val reason: String? = null,
+    @SerialName("reasons") val reasons: List<String> = emptyList(),
+    @SerialName("mode") val mode: String? = null
 )
 
 @Serializable

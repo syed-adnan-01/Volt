@@ -8,17 +8,17 @@ import { AppError } from '../utils/AppError.js';
 import type { RoutingResult } from '@volt/contracts';
 import { getCachedJson, setCachedJson } from '../cache/redisCache.js';
 
-export async function getRoute(
+export async function getRoutes(
   originLat: number,
   originLng: number,
   destLat: number,
   destLng: number
-): Promise<RoutingResult> {
-  // Check Redis route cache first (TTL 1 hour = 3600 seconds)
-  const cacheKey = `cache:route:${originLat.toFixed(4)},${originLng.toFixed(4)}:${destLat.toFixed(4)},${destLng.toFixed(4)}`;
-  const cachedRoute = await getCachedJson<RoutingResult>(cacheKey);
-  if (cachedRoute) {
-    return cachedRoute;
+): Promise<RoutingResult[]> {
+  // Check Redis routes cache first (TTL 1 hour = 3600 seconds)
+  const cacheKey = `cache:routes:${originLat.toFixed(4)},${originLng.toFixed(4)}:${destLat.toFixed(4)},${destLng.toFixed(4)}`;
+  const cachedRoutes = await getCachedJson<RoutingResult[]>(cacheKey);
+  if (cachedRoutes && Array.isArray(cachedRoutes) && cachedRoutes.length > 0) {
+    return cachedRoutes;
   }
 
   const url = `${env.OSRM_BASE_URL}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&alternatives=true`;
@@ -41,35 +41,55 @@ export async function getRoute(
       throw new Error('No route found by OSRM');
     }
 
-    const route = data.routes[0];
-
-    const result: RoutingResult = {
+    const primaryDuration = data.routes[0].duration;
+    const routes: RoutingResult[] = data.routes.map((route: any, index: number) => ({
       distanceKm: route.distance / 1000,
       durationMinutes: route.duration / 60,
-      detourMinutes: 0, // Direct route has 0 detour
-      geometry: (typeof route.geometry === 'string' ? route.geometry : []) as any,
-    };
+      detourMinutes: index === 0 ? 0 : Math.max(0, (route.duration - primaryDuration) / 60),
+      geometry: (typeof route.geometry === 'string' ? route.geometry : (route.geometry || [])) as any,
+    }));
 
-    // Cache successful route result
-    await setCachedJson(cacheKey, result, 3600);
+    // Cache successful route results
+    await setCachedJson(cacheKey, routes, 3600);
 
-    return result;
+    return routes;
   } catch (error: any) {
     clearTimeout(timeout);
     
     console.warn('⚠️ Routing service failed, using mock data for development.', error.message);
     
-    // For development (Phase 2), we gracefully fallback to a mock route so the API works independently
+    // For development (Phase 2), we gracefully fallback to mock candidate routes so the API works independently
     const distanceKm = Math.sqrt(Math.pow(destLat - originLat, 2) + Math.pow(destLng - originLng, 2)) * 111; // Rough Haversine
-    const result: RoutingResult = {
+    const primaryRoute: RoutingResult = {
       distanceKm: parseFloat(distanceKm.toFixed(2)),
       durationMinutes: parseFloat((distanceKm / 1.5).toFixed(0)), // ~90km/h avg
       detourMinutes: 0,
       geometry: [],
     };
 
-    await setCachedJson(cacheKey, result, 3600);
+    const routes: RoutingResult[] = [primaryRoute];
+    if (distanceKm > 20) {
+      routes.push({
+        distanceKm: parseFloat((distanceKm * 1.12).toFixed(2)),
+        durationMinutes: parseFloat(((distanceKm * 1.12) / 1.4).toFixed(0)),
+        detourMinutes: parseFloat((((distanceKm * 1.12) / 1.4) - (distanceKm / 1.5)).toFixed(0)),
+        geometry: [],
+      });
+    }
 
-    return result;
+    await setCachedJson(cacheKey, routes, 3600);
+
+    return routes;
   }
 }
+
+export async function getRoute(
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number
+): Promise<RoutingResult> {
+  const routes = await getRoutes(originLat, originLng, destLat, destLng);
+  return routes[0];
+}
+

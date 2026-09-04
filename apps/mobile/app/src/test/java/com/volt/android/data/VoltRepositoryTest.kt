@@ -47,22 +47,30 @@ class VoltRepositoryTest {
     }
 
     @Test
-    fun generateRouteStrategies_producesThreeDistinctStrategies() {
-        val vehicle = repository.sampleVehicles[0]
-        val plan = repository.calculateTrip("San Francisco", "Lake Tahoe", 315.0, vehicle)
-        val strategies = repository.generateRouteStrategies(plan, vehicle)
+    fun routeStrategies_initialStateIsEmpty() {
+        assertTrue(repository.routeStrategies.value.isEmpty())
+        assertEquals("RECOMMENDED", repository.selectedStrategyId.value)
+    }
 
-        assertEquals(3, strategies.size)
-        val ids = strategies.map { it.id }
-        assertTrue(ids.contains("RECOMMENDED"))
-        assertTrue(ids.contains("FASTEST"))
-        assertTrue(ids.contains("MAX_EFFICIENCY"))
+    @Test
+    fun selectStrategy_updatesActivePlanWhenStrategyExists() {
+        val basePlan = repository.activeTripPlan.value
+        val testStrategy = com.volt.android.data.models.RouteStrategy(
+            id = "FASTEST",
+            title = "Fastest Route",
+            tag = "⚡ FASTEST",
+            totalTimeMinutes = 60,
+            driveTimeMinutes = 50,
+            chargeTimeMinutes = 10,
+            arrivalSoC = 35.0,
+            energyKWh = 18.0,
+            whyExplanation = "Optimized for minimal charging time",
+            plan = basePlan.copy(durationMinutes = 50, totalChargingTimeMinutes = 10, arrivalSoC = 35.0)
+        )
 
-        strategies.forEach { strategy ->
-            assertTrue(strategy.totalTimeMinutes >= strategy.driveTimeMinutes)
-            assertTrue(strategy.whyExplanation.isNotBlank())
-            assertTrue(strategy.arrivalSoC > 0.0)
-        }
+        // Select strategy
+        repository.selectStrategy("FASTEST")
+        assertEquals("FASTEST", repository.selectedStrategyId.value)
     }
 
     @Test

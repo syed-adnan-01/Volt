@@ -109,7 +109,10 @@ data class BatteryResult(
 data class OptimizerData(
     @SerialName("total_wait_minutes") val totalWaitMinutes: Double = 0.0,
     @SerialName("total_charging_minutes") val totalChargingMinutes: Int = 0,
-    @SerialName("final_soc") val finalSoc: Double? = null
+    @SerialName("final_soc") val finalSoc: Double? = null,
+    @SerialName("reason") val reason: String? = null,
+    @SerialName("reasons") val reasons: List<String> = emptyList(),
+    @SerialName("mode") val mode: String? = null
 )
 
 @Serializable

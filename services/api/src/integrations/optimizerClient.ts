@@ -23,6 +23,19 @@ export interface TripStop {
   powerKw?: number;
 }
 
+export interface OptimizerAlternative {
+  rank: number;
+  stops: TripStop[];
+  totalDistanceKm: number;
+  totalDrivingDurationMinutes: number;
+  totalChargingDurationMinutes: number;
+  totalPredictedWaitMinutes: number;
+  totalTripDurationMinutes: number;
+  destinationSoCPct: number;
+  totalCost?: number;
+  reason: string;
+}
+
 export interface OptimizerResult {
   status: 'OPTIMAL' | 'SUBOPTIMAL' | 'UNREACHABLE';
   stops: TripStop[];
@@ -33,7 +46,9 @@ export interface OptimizerResult {
   totalDrivingDurationMinutes?: number;
   totalTripDurationMinutes?: number;
   reason?: string;
+  reasons?: string[];
   mode?: string;
+  alternatives?: OptimizerAlternative[];
 }
 
 export interface OptimizeTripParams {
@@ -126,6 +141,38 @@ export async function optimizeTrip(
         powerKw: stop.charger?.powerKw ?? 60,
       }));
 
+      const rawAlternatives = Array.isArray(data.alternatives) ? data.alternatives : [];
+      const alternatives: OptimizerAlternative[] = rawAlternatives.map((alt: any) => {
+        const altStops: TripStop[] = (alt.stops || []).map((stop: any, index: number) => ({
+          stationId: stop.charger?.id ?? `station-alt-${index + 1}`,
+          name: stop.charger?.name ?? `Charging Stop #${index + 1}`,
+          sequence: index + 1,
+          arrivalSoc: Math.round(stop.socBeforeChargingPct ?? 15),
+          departureSoc: Math.round(stop.socAfterChargingPct ?? 80),
+          expectedWaitMinutes: stop.prediction?.expectedWaitMinutes ?? 0,
+          chargingMinutes: Math.round(stop.chargingTimeMinutes ?? 20),
+          energyAddedKwh: Number((stop.energyChargedKwh ?? 30).toFixed(2)),
+          latitude: stop.charger?.lat ?? 0,
+          longitude: stop.charger?.lon ?? 0,
+          powerKw: stop.charger?.powerKw ?? 60,
+        }));
+
+        return {
+          rank: alt.rank ?? 2,
+          stops: altStops,
+          totalDistanceKm: alt.totalDistanceKm,
+          totalDrivingDurationMinutes: alt.totalDrivingDurationMinutes,
+          totalChargingDurationMinutes: alt.totalChargingDurationMinutes,
+          totalPredictedWaitMinutes: alt.totalPredictedWaitMinutes,
+          totalTripDurationMinutes: alt.totalTripDurationMinutes,
+          destinationSoCPct: alt.destinationSoCPct,
+          totalCost: alt.totalCost,
+          reason: alt.reason || 'Alternative route with charging stops',
+        };
+      });
+
+      const mainReason = data.reason ?? 'Optimized with Member 5 EV routing engine';
+
       return {
         status: 'OPTIMAL',
         stops,
@@ -135,8 +182,10 @@ export async function optimizeTrip(
         totalDistanceKm: data.totalDistanceKm,
         totalDrivingDurationMinutes: data.totalDrivingDurationMinutes,
         totalTripDurationMinutes: data.totalTripDurationMinutes,
-        reason: data.reason ?? 'Optimized with Member 5 EV routing engine',
+        reason: mainReason,
+        reasons: [mainReason],
         mode: data.mode ?? mode,
+        alternatives,
       };
     } else if (response.status === 422) {
       return {
@@ -146,6 +195,7 @@ export async function optimizeTrip(
         totalChargingMinutes: 0,
         finalSoc: 0,
         reason: 'Destination cannot be reached safely with current battery SoC respecting safety buffer.',
+        reasons: ['Destination cannot be reached safely with current battery SoC respecting safety buffer.'],
       };
     }
   } catch (err: unknown) {
@@ -192,14 +242,51 @@ export async function optimizeTrip(
     powerKw: chargingPower,
   };
 
+  const fallbackAlternatives: OptimizerAlternative[] = [];
+  if (sortedCandidates.length > 1) {
+    const altCharger = sortedCandidates[1]!;
+    const altPred = predictions[altCharger.id];
+    const altPower = altCharger.maxPowerKw || 50;
+    const altChargeMins = Math.round((energyNeeded / Math.min(altPower, evPayload.chargingPowerKw)) * 60);
+    const altWait = altPred ? altPred.expectedWaitMinutes : 8;
+
+    fallbackAlternatives.push({
+      rank: 2,
+      stops: [{
+        stationId: altCharger.id,
+        name: altCharger.operator ? `${altCharger.operator} Station` : 'Alternative Corridor Charger',
+        sequence: 1,
+        arrivalSoc: Math.max(10, Math.round(currentSoc * 0.38)),
+        departureSoc: 80,
+        expectedWaitMinutes: altWait,
+        chargingMinutes: altChargeMins,
+        energyAddedKwh: energyNeeded,
+        latitude: altCharger.latitude,
+        longitude: altCharger.longitude,
+        powerKw: altPower,
+      }],
+      totalDistanceKm: 0,
+      totalDrivingDurationMinutes: 0,
+      totalChargingDurationMinutes: altChargeMins,
+      totalPredictedWaitMinutes: altWait,
+      totalTripDurationMinutes: 0,
+      destinationSoCPct: 30,
+      reason: `Alternative charging stop via ${altCharger.operator ? `${altCharger.operator} Station` : altCharger.id} (Predicted wait: ${altWait}m)`,
+    });
+  }
+
+  const fallbackReason = 'Selected lowest predicted wait corridor station via intelligent fallback strategy';
+
   return {
     status: 'OPTIMAL',
     stops: [fallbackStop],
     totalWaitMinutes: fallbackStop.expectedWaitMinutes,
     totalChargingMinutes: fallbackStop.chargingMinutes,
     finalSoc: 30,
-    reason: 'Selected lowest predicted wait corridor station via intelligent fallback strategy',
+    reason: fallbackReason,
+    reasons: [fallbackReason],
     mode,
+    alternatives: fallbackAlternatives,
   };
 }
 

@@ -96,9 +96,7 @@ class VoltRepository {
     private val _activeTripPlan = MutableStateFlow(createDefaultTripPlan(sampleVehicles[0]))
     val activeTripPlan: StateFlow<TripPlanResult> = _activeTripPlan.asStateFlow()
 
-    private val _routeStrategies = MutableStateFlow<List<RouteStrategy>>(
-        generateRouteStrategies(createDefaultTripPlan(sampleVehicles[0]), sampleVehicles[0])
-    )
+    private val _routeStrategies = MutableStateFlow<List<RouteStrategy>>(emptyList())
     val routeStrategies: StateFlow<List<RouteStrategy>> = _routeStrategies.asStateFlow()
 
     private val _selectedStrategyId = MutableStateFlow("RECOMMENDED")
@@ -123,19 +121,19 @@ class VoltRepository {
         originLat: Double = 37.7749,
         originLng: Double = -122.4194,
         destLat: Double = 39.0968,
-        destLng: Double = -120.0324
+        destLng: Double = -120.0324,
+        vehicleId: String? = null
     ) {
         _isLoading.value = true
         _networkError.value = null
 
         withContext(Dispatchers.IO) {
+            val currentVehicle = _selectedVehicle.value
             try {
-                val currentVehicle = _selectedVehicle.value
-                val currentSoc = _telemetry.value.socPercent
-
+                val targetVehicleId = vehicleId ?: currentVehicle.id
                 val request = TripPlanRequest(
-                    vehicleId = currentVehicle.id,
-                    currentSoc = currentSoc,
+                    vehicleId = targetVehicleId,
+                    currentSoc = currentVehicle.currentSoC,
                     originLat = originLat,
                     originLng = originLng,
                     destLat = destLat,
@@ -145,35 +143,41 @@ class VoltRepository {
                 val response = ApiClient.apiService.planTrip(request)
                 if (response.isSuccessful && response.body()?.success == true && response.body()?.data != null) {
                     val dto = response.body()!!.data!!
-                    
-                    val batteryResult = dto.battery?.let {
-                        BatteryResult(
-                            currentSoC = it.currentSoC,
-                            arrivalSoC = it.arrivalSoC,
-                            energyRequiredKWh = it.energyRequiredKWh,
-                            reachable = it.reachable,
-                            riskScore = it.riskScore,
-                            safetyMarginPercent = it.safetyMarginPercent
-                        )
-                    }
-
-                    val optimizerData = dto.optimizerData?.let {
-                        OptimizerData(
-                            totalWaitMinutes = it.totalWaitMinutes,
-                            totalChargingMinutes = it.totalChargingMinutes,
-                            finalSoc = it.finalSoc
-                        )
-                    }
 
                     val stops = dto.stops.map { stopDto ->
                         RouteStop(
-                            name = stopDto.name ?: "Charging Stop ${stopDto.sequence}",
-                            type = if (stopDto.sequence == 0) StopType.ORIGIN else StopType.CHARGER_STOP,
-                            distanceFromOriginKm = 0.0,
+                            stationId = stopDto.stationId,
+                            name = stopDto.name ?: "Charging Station",
+                            type = StopType.CHARGER_STOP,
                             arrivalSoC = stopDto.arrivalSoc,
                             departureSoC = stopDto.departureSoc,
-                            chargeDurationMinutes = stopDto.chargingMinutes,
-                            energyAddedKWh = stopDto.energyAddedKwh
+                            chargingDurationMinutes = stopDto.chargingMinutes,
+                            expectedWaitMinutes = stopDto.expectedWaitMinutes.toInt(),
+                            latitude = stopDto.latitude,
+                            longitude = stopDto.longitude,
+                            powerKw = stopDto.powerKw.toInt()
+                        )
+                    }
+
+                    val optimizerData = dto.optimizerData?.let { opt ->
+                        OptimizerData(
+                            totalWaitMinutes = opt.totalWaitMinutes,
+                            totalChargingMinutes = opt.totalChargingMinutes,
+                            finalSoc = opt.finalSoc,
+                            reason = opt.reason,
+                            reasons = opt.reasons,
+                            mode = opt.mode
+                        )
+                    }
+
+                    val batteryResult = dto.battery?.let { b ->
+                        BatteryResult(
+                            currentSoC = b.currentSoC ?: currentVehicle.currentSoC,
+                            arrivalSoC = b.arrivalSoC,
+                            energyRequiredKWh = b.energyRequiredKWh,
+                            reachable = b.reachable,
+                            riskScore = b.riskScore,
+                            safetyMarginPercent = b.safetyMarginPercent
                         )
                     }
 
@@ -184,14 +188,14 @@ class VoltRepository {
                         distanceKm = dto.distanceKm,
                         durationMinutes = dto.durationMinutes,
                         totalChargingTimeMinutes = dto.optimizerData?.totalChargingMinutes ?: 0,
-                        energyRequiredKWh = dto.battery?.energyRequiredKWh ?: ((dto.distanceKm * currentVehicle.baseConsumptionWhKm) / 1000.0),
+                        energyRequiredKWh = dto.battery?.energyRequiredKWh ?: 0.0,
                         arrivalSoC = dto.battery?.arrivalSoC ?: 20.0,
                         isFeasible = dto.battery?.reachable ?: true,
                         safetyMarginPercent = dto.battery?.safetyMarginPercent ?: 10.0,
                         riskScore = dto.battery?.riskScore ?: 0.1,
                         geometry = dto.geometry,
                         battery = batteryResult,
-                        stops = if (stops.isNotEmpty()) stops else calculateTrip(origin, destination, distanceKm, currentVehicle).stops,
+                        stops = stops,
                         optimizerData = optimizerData,
                         recommendations = listOf(
                             "Route optimized with live battery reachability & station predictions.",
@@ -199,7 +203,80 @@ class VoltRepository {
                         )
                     )
                     _activeTripPlan.value = livePlan
+
                     val backendStrategies = dto.strategies.map { s ->
+                        val stratBattery = s.battery?.let { b ->
+                            BatteryResult(
+                                currentSoC = b.currentSoC ?: currentVehicle.currentSoC,
+                                arrivalSoC = b.arrivalSoC,
+                                energyRequiredKWh = b.energyRequiredKWh,
+                                reachable = b.reachable,
+                                riskScore = b.riskScore,
+                                safetyMarginPercent = b.safetyMarginPercent
+                            )
+                        } ?: livePlan.battery
+
+                        val stratStops = if (s.stops.isNotEmpty()) {
+                            s.stops.map { stopDto ->
+                                RouteStop(
+                                    stationId = stopDto.stationId,
+                                    name = stopDto.name ?: "Charging Station",
+                                    type = StopType.CHARGER_STOP,
+                                    arrivalSoC = stopDto.arrivalSoc,
+                                    departureSoC = stopDto.departureSoc,
+                                    chargingDurationMinutes = stopDto.chargingMinutes,
+                                    expectedWaitMinutes = stopDto.expectedWaitMinutes.toInt(),
+                                    latitude = stopDto.latitude,
+                                    longitude = stopDto.longitude,
+                                    powerKw = stopDto.powerKw.toInt()
+                                )
+                            }
+                        } else {
+                            if (s.chargeTimeMinutes == 0) {
+                                listOf(
+                                    RouteStop(
+                                        stationId = "origin",
+                                        name = origin,
+                                        type = StopType.ORIGIN,
+                                        arrivalSoC = currentVehicle.currentSoC,
+                                        departureSoC = currentVehicle.currentSoC
+                                    ),
+                                    RouteStop(
+                                        stationId = "destination",
+                                        name = destination,
+                                        type = StopType.DESTINATION,
+                                        arrivalSoC = s.arrivalSoc,
+                                        departureSoC = s.arrivalSoc
+                                    )
+                                )
+                            } else {
+                                livePlan.stops
+                            }
+                        }
+
+                        val stratOptData = s.optimizerData?.let { opt ->
+                            OptimizerData(
+                                totalWaitMinutes = opt.totalWaitMinutes,
+                                totalChargingMinutes = opt.totalChargingMinutes,
+                                finalSoc = opt.finalSoc,
+                                reason = opt.reason,
+                                reasons = opt.reasons,
+                                mode = opt.mode
+                            )
+                        } ?: livePlan.optimizerData
+
+                        val stratPlan = livePlan.copy(
+                            distanceKm = if (s.distanceKm > 0) s.distanceKm else livePlan.distanceKm,
+                            durationMinutes = if (s.durationMinutes > 0) s.durationMinutes else livePlan.durationMinutes,
+                            totalChargingTimeMinutes = s.chargeTimeMinutes,
+                            arrivalSoC = s.arrivalSoc,
+                            energyRequiredKWh = s.energyKwh,
+                            battery = stratBattery,
+                            stops = stratStops,
+                            optimizerData = stratOptData,
+                            geometry = s.geometry ?: livePlan.geometry
+                        )
+
                         RouteStrategy(
                             id = s.id,
                             title = s.title,
@@ -210,103 +287,28 @@ class VoltRepository {
                             arrivalSoC = s.arrivalSoc,
                             energyKWh = s.energyKwh,
                             whyExplanation = s.whyExplanation,
-                            plan = livePlan.copy(
-                                totalChargingTimeMinutes = s.chargeTimeMinutes,
-                                arrivalSoC = s.arrivalSoc,
-                                energyRequiredKWh = s.energyKwh
-                            )
+                            plan = stratPlan
                         )
                     }
+
+                    _routeStrategies.value = backendStrategies
                     if (backendStrategies.isNotEmpty()) {
-                        _routeStrategies.value = backendStrategies
-                    } else {
-                        _routeStrategies.value = generateRouteStrategies(livePlan, currentVehicle)
+                        _selectedStrategyId.value = backendStrategies[0].id
                     }
                 } else {
                     val fallbackPlan = calculateTrip(origin, destination, distanceKm, currentVehicle)
                     _activeTripPlan.value = fallbackPlan
-                    _routeStrategies.value = generateRouteStrategies(fallbackPlan, currentVehicle)
+                    _routeStrategies.value = emptyList()
                 }
             } catch (e: Exception) {
                 _networkError.value = e.message
                 val fallbackPlan = calculateTrip(origin, destination, distanceKm, _selectedVehicle.value)
                 _activeTripPlan.value = fallbackPlan
-                _routeStrategies.value = generateRouteStrategies(fallbackPlan, _selectedVehicle.value)
+                _routeStrategies.value = emptyList()
             } finally {
                 _isLoading.value = false
             }
         }
-    }
-
-    // ──────────────────────────────────────────────
-    // 2. Generate Explainable Route Strategies
-    // ──────────────────────────────────────────────
-    fun generateRouteStrategies(plan: TripPlanResult, vehicle: VehicleProfile): List<RouteStrategy> {
-        val totalDriveTime = plan.durationMinutes
-        val totalChargeTime = plan.totalChargingTimeMinutes
-        val baseEnergy = plan.energyRequiredKWh
-
-        // 1. Recommended (Balanced)
-        val recommended = RouteStrategy(
-            id = "RECOMMENDED",
-            title = "Recommended (Balanced)",
-            tag = "⚡ AI OPTIMIZED",
-            totalTimeMinutes = totalDriveTime + totalChargeTime,
-            driveTimeMinutes = totalDriveTime,
-            chargeTimeMinutes = totalChargeTime,
-            arrivalSoC = plan.arrivalSoC,
-            energyKWh = baseEnergy,
-            whyExplanation = "Minimum total travel time with a safe ${(plan.safetyMarginPercent).toInt()}% reserve buffer above the ${vehicle.reserveSocPercent.toInt()}% reserve threshold.",
-            plan = plan
-        )
-
-        // 2. Fastest Journey (Aggressive Charging Curve)
-        val fastChargeTime = (totalChargeTime * 0.75).roundToInt().coerceAtLeast(0)
-        val fastestArrivalSoC = max(10.0, plan.arrivalSoC - 6.0)
-        val fastest = RouteStrategy(
-            id = "FASTEST",
-            title = "Fastest Journey",
-            tag = "⏱️ MIN TIME",
-            totalTimeMinutes = totalDriveTime + fastChargeTime,
-            driveTimeMinutes = totalDriveTime,
-            chargeTimeMinutes = fastChargeTime,
-            arrivalSoC = (fastestArrivalSoC * 10.0).roundToInt() / 10.0,
-            energyKWh = baseEnergy,
-            whyExplanation = "Optimizes charging stop duration by targeting peak power curve segments and minimizing total dwell time.",
-            plan = plan.copy(
-                totalChargingTimeMinutes = fastChargeTime,
-                arrivalSoC = fastestArrivalSoC,
-                recommendations = listOf(
-                    "Charges at peak available power band.",
-                    "Minimizes charging dwell time to speed up overall arrival."
-                )
-            )
-        )
-
-        // 3. Max Battery Safety & Longevity
-        val safeChargeTime = (totalChargeTime * 1.25).roundToInt().coerceAtLeast(if (totalChargeTime > 0) 15 else 0)
-        val safeArrivalSoC = min(40.0, plan.arrivalSoC + 10.0)
-        val safe = RouteStrategy(
-            id = "MAX_EFFICIENCY",
-            title = "Battery Longevity & Buffer",
-            tag = "🔋 MAX BUFFER",
-            totalTimeMinutes = totalDriveTime + safeChargeTime,
-            driveTimeMinutes = totalDriveTime,
-            chargeTimeMinutes = safeChargeTime,
-            arrivalSoC = (safeArrivalSoC * 10.0).roundToInt() / 10.0,
-            energyKWh = (baseEnergy * 0.95 * 10.0).roundToInt() / 10.0,
-            whyExplanation = "Prioritizes battery preservation with gentler charge rates and a higher ${(safeArrivalSoC).toInt()}% arrival reserve SoC.",
-            plan = plan.copy(
-                totalChargingTimeMinutes = safeChargeTime,
-                arrivalSoC = safeArrivalSoC,
-                recommendations = listOf(
-                    "High-reliability charging network selected.",
-                    "Avoids deep discharges to preserve pack chemistry."
-                )
-            )
-        )
-
-        return listOf(recommended, fastest, safe)
     }
 
     fun selectStrategy(strategyId: String) {
@@ -318,7 +320,7 @@ class VoltRepository {
     }
 
     // ──────────────────────────────────────────────
-    // 3. Live Reroute Trigger (POST /trips/:id/reroute)
+    // 2. Live Reroute Trigger (POST /trips/:id/reroute)
     // ──────────────────────────────────────────────
     suspend fun rerouteTrip(tripId: String) {
         _isLoading.value = true
@@ -335,7 +337,6 @@ class VoltRepository {
                         recommendations = listOf("Reroute successfully applied. Navigating to updated charging stop.")
                     )
                     _activeTripPlan.value = updatedPlan
-                    _routeStrategies.value = generateRouteStrategies(updatedPlan, _selectedVehicle.value)
                 }
             } catch (e: Exception) {
                 _networkError.value = e.message
@@ -501,7 +502,7 @@ class VoltRepository {
             vehicle
         )
         _activeTripPlan.value = newPlan
-        _routeStrategies.value = generateRouteStrategies(newPlan, vehicle)
+        _routeStrategies.value = emptyList()
     }
 
     fun resetTelemetryBaseline() {
