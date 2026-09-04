@@ -1,6 +1,13 @@
 package com.volt.android.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -35,9 +42,13 @@ import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ElectricMeter
 import androidx.compose.material.icons.filled.EvStation
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -45,16 +56,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,9 +80,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import com.volt.android.data.models.ChargingStation
 import com.volt.android.ui.components.FeedbackDialog
 import com.volt.android.ui.theme.VoltAmber
@@ -88,7 +113,9 @@ import com.volt.android.ui.theme.VoltTextPrimary
 import com.volt.android.ui.theme.VoltTextSecondary
 import com.volt.android.ui.theme.VoltTrackBg
 import com.volt.android.ui.viewmodel.VoltUiState
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChargingScreen(
     uiState: VoltUiState,
@@ -96,10 +123,14 @@ fun ChargingScreen(
     onToggleAvailableOnly: () -> Unit,
     onSimulateFastCharge: (ChargingStation) -> Unit,
     onSubmitFeedback: (stationId: String, rating: Int, plugs: Int?, wait: Int?, functional: Boolean, comment: String?) -> Unit = { _, _, _, _, _, _ -> },
+    onRefreshNearby: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var selectedFeedbackStation by remember { mutableStateOf<ChargingStation?>(null) }
     var showActiveChargingView by remember { mutableStateOf(false) }
+    var showMapOverlay by remember { mutableStateOf(false) }
+    var selectedMapStation by remember { mutableStateOf<ChargingStation?>(null) }
 
     if (selectedFeedbackStation != null) {
         FeedbackDialog(
@@ -116,6 +147,38 @@ fun ChargingScreen(
                 )
             }
         )
+    }
+
+    // ── Full-screen Map Overlay ───────────────────────────────────────────────
+    if (showMapOverlay) {
+        StationsMapOverlay(
+            stations = uiState.stations,
+            userLocation = uiState.userLocation,
+            selectedStation = selectedMapStation,
+            onStationSelected = { selectedMapStation = it },
+            onNavigateToStation = { station ->
+                val lat = station.latitude ?: return@StationsMapOverlay
+                val lng = station.longitude ?: return@StationsMapOverlay
+                val uri = Uri.parse("google.navigation:q=$lat,$lng&mode=d")
+                val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                    setPackage("com.google.android.apps.maps")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                    val fallback = Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving"))
+                    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(fallback)
+                }
+            },
+            onDismiss = {
+                showMapOverlay = false
+                selectedMapStation = null
+            }
+        )
+        return
     }
 
     if (uiState.telemetry.isCharging || showActiveChargingView) {
@@ -141,14 +204,280 @@ fun ChargingScreen(
             },
             onFeedbackClick = { station -> selectedFeedbackStation = station },
             onPreviewChargingSession = { showActiveChargingView = true },
+            onRefreshNearby = onRefreshNearby,
+            onViewAllOnMap = { showMapOverlay = true },
+            onViewStationOnMap = { station ->
+                selectedMapStation = station
+                showMapOverlay = true
+            },
             modifier = modifier
         )
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 2: Station Discovery View (Matching Screen 2 in Reference)
-// ──────────────────────────────────────────────────────────────────────────────────
+// Full-Screen Google Map Overlay with Station Markers
+// ─────────────────────────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StationsMapOverlay(
+    stations: List<ChargingStation>,
+    userLocation: com.google.android.gms.maps.model.LatLng?,
+    selectedStation: ChargingStation?,
+    onStationSelected: (ChargingStation?) -> Unit,
+    onNavigateToStation: (ChargingStation) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Camera starts at user's location, or the first station, or Bengaluru default
+    val initialLatLng = userLocation
+        ?: stations.firstOrNull()?.let {
+            if (it.latitude != null && it.longitude != null)
+                LatLng(it.latitude, it.longitude) else null
+        }
+        ?: LatLng(12.9716, 77.5946)
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(initialLatLng, 12f)
+    }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // ── Google Map ────────────────────────────────────────────────────────
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(isMyLocationEnabled = true),
+            uiSettings = MapUiSettings(
+                myLocationButtonEnabled = true,
+                zoomControlsEnabled = true,
+                mapToolbarEnabled = false
+            )
+        ) {
+            stations.forEach { station ->
+                if (station.latitude != null && station.longitude != null) {
+                    val markerColor = when {
+                        station.powerKw >= 100 -> BitmapDescriptorFactory.HUE_GREEN
+                        station.powerKw >= 50  -> BitmapDescriptorFactory.HUE_YELLOW
+                        else                   -> BitmapDescriptorFactory.HUE_RED
+                    }
+                    Marker(
+                        state = MarkerState(position = LatLng(station.latitude, station.longitude)),
+                        title = station.name,
+                        snippet = "${station.availablePlugs}/${station.totalPlugs} plugs • ${station.powerKw} kW",
+                        icon = BitmapDescriptorFactory.defaultMarker(markerColor),
+                        onClick = {
+                            onStationSelected(station)
+                            false
+                        }
+                    )
+                }
+            }
+        }
+
+        // ── Close button ──────────────────────────────────────────────────────
+        Box(
+            modifier = Modifier
+                .padding(16.dp)
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(VoltCardBg)
+                .border(1.dp, VoltCardBorder, CircleShape)
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Close Map",
+                tint = VoltTextPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        // ── Station count pill ────────────────────────────────────────────────
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(VoltCardBg.copy(alpha = 0.95f))
+                .border(1.dp, VoltCardBorder, RoundedCornerShape(20.dp))
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.EvStation,
+                    contentDescription = null,
+                    tint = VoltCyan,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "${stations.count { it.latitude != null }} stations nearby",
+                    color = VoltTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        // ── Legend ────────────────────────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, bottom = if (selectedStation != null) 300.dp else 24.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(VoltCardBg.copy(alpha = 0.95f))
+                .border(1.dp, VoltCardBorder, RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            LegendItem(color = Color(0xFF34A853), label = "≥ 100 kW (DC Fast)")
+            LegendItem(color = Color(0xFFFBBC04), label = "50–99 kW")
+            LegendItem(color = Color(0xFFEA4335), label = "< 50 kW (AC)")
+        }
+    }
+
+    // ── Station Detail Bottom Sheet ───────────────────────────────────────────
+    if (selectedStation != null) {
+        ModalBottomSheet(
+            onDismissRequest = { onStationSelected(null) },
+            sheetState = sheetState,
+            containerColor = VoltCardBg,
+            contentColor = VoltTextPrimary,
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 12.dp, bottom = 4.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(VoltCardBorder)
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+            ) {
+                // Station name
+                Text(
+                    text = selectedStation.name,
+                    color = VoltTextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = selectedStation.address,
+                    color = VoltTextSecondary,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Stats row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MapStationStatChip(
+                        label = "Power",
+                        value = "${selectedStation.powerKw} kW",
+                        color = VoltCyan,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MapStationStatChip(
+                        label = "Plugs",
+                        value = "${selectedStation.availablePlugs}/${selectedStation.totalPlugs}",
+                        color = VoltEmerald,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MapStationStatChip(
+                        label = "Type",
+                        value = if (selectedStation.isFastCharger) "DC Fast" else "AC",
+                        color = VoltAmber,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Navigate button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .clip(RoundedCornerShape(25.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(VoltGradientStart, VoltGradientEnd)
+                            )
+                        )
+                        .clickable { onNavigateToStation(selectedStation) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Navigation,
+                            contentDescription = "Navigate",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Navigate to Station",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(color, CircleShape)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(text = label, color = VoltTextSecondary, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun MapStationStatChip(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(VoltCardElevated)
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(text = label, color = VoltTextSecondary, fontSize = 10.sp)
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(text = value, color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCREEN 2: Station Discovery View
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun StationDiscoveryView(
     uiState: VoltUiState,
@@ -157,6 +486,9 @@ private fun StationDiscoveryView(
     onSimulateFastCharge: (ChargingStation) -> Unit,
     onFeedbackClick: (ChargingStation) -> Unit,
     onPreviewChargingSession: () -> Unit,
+    onRefreshNearby: () -> Unit,
+    onViewAllOnMap: () -> Unit,
+    onViewStationOnMap: (ChargingStation) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -165,7 +497,7 @@ private fun StationDiscoveryView(
             .background(VoltDarkBg)
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        // Header
+        // ── Header ────────────────────────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -180,14 +512,14 @@ private fun StationDiscoveryView(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "Fast Charging Hubs",
+                    text = "Nearby Stations",
                     color = VoltTextPrimary,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            // Quick live session preview toggle
+            // Active Session preview toggle
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -216,33 +548,40 @@ private fun StationDiscoveryView(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Horizontal Filter Chips (Matching Screen 2: Nearby, DC Fast, AC, Available Now)
+        // ── Filter + Action Row ───────────────────────────────────────────────
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Nearby Pill (Selected Gradient Pill)
+            // Nearby pill
             item {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(
-                            Brush.horizontalGradient(
-                                listOf(VoltGradientStart, VoltGradientEnd)
-                            )
+                            Brush.horizontalGradient(listOf(VoltGradientStart, VoltGradientEnd))
                         )
+                        .clickable { onRefreshNearby() }
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.NearMe,
-                            contentDescription = "Nearby",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.MyLocation,
+                                contentDescription = "Refresh Nearby",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = "Nearby",
+                            text = if (uiState.isLoading) "Locating…" else "Nearby",
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -274,7 +613,7 @@ private fun StationDiscoveryView(
                 }
             }
 
-            // AC Level 2 Chip
+            // AC Chip
             item {
                 Box(
                     modifier = Modifier
@@ -322,34 +661,253 @@ private fun StationDiscoveryView(
                     }
                 }
             }
+
+            // View All on Map chip
+            item {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(VoltCardBg)
+                        .border(1.dp, VoltCardBorder, RoundedCornerShape(20.dp))
+                        .clickable { onViewAllOnMap() }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Map,
+                            contentDescription = "View Map",
+                            tint = VoltCyan,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Map View",
+                            color = VoltCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Charging Station List (Screen 2 Card Layout)
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(uiState.stations) { station ->
-                StationDiscoveryCard(
-                    station = station,
-                    onChargeClick = { onSimulateFastCharge(station) },
-                    onFeedbackClick = { onFeedbackClick(station) }
-                )
+        // ── Content: Loading / Empty / Station List ───────────────────────────
+        when {
+            uiState.isLoading && uiState.stations.isEmpty() -> {
+                // Shimmer loading state
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    repeat(3) {
+                        ShimmerStationCard()
+                    }
+                }
             }
-            item {
-                Spacer(modifier = Modifier.height(40.dp))
+
+            !uiState.isLoading && uiState.stations.isEmpty() -> {
+                // Empty state — prompt user to find nearby stations
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(VoltBlueLight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.EvStation,
+                                contentDescription = null,
+                                tint = VoltCyan,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                        Text(
+                            text = "Find EV Stations Near You",
+                            color = VoltTextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Tap below to locate real charging stations within 50 km of your current position",
+                            color = VoltTextSecondary,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .clip(RoundedCornerShape(25.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(VoltGradientStart, VoltGradientEnd)
+                                    )
+                                )
+                                .clickable { onRefreshNearby() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.MyLocation,
+                                    contentDescription = "Locate",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Find Nearby Stations",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                // Station list
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    item {
+                        // Subtitle with station count
+                        Text(
+                            text = "${uiState.stations.size} stations found nearby",
+                            color = VoltTextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                    items(uiState.stations) { station ->
+                        StationDiscoveryCard(
+                            station = station,
+                            onChargeClick = { onSimulateFastCharge(station) },
+                            onFeedbackClick = { onFeedbackClick(station) },
+                            onViewOnMap = { onViewStationOnMap(station) }
+                        )
+                    }
+                    item {
+                        // Refresh at bottom
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(VoltCardBg)
+                                .border(1.dp, VoltCardBorder, RoundedCornerShape(16.dp))
+                                .clickable { onRefreshNearby() }
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Refresh",
+                                    tint = VoltCyan,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Refresh Nearby Stations",
+                                    color = VoltCyan,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(40.dp))
+                    }
+                }
             }
         }
     }
 }
 
+// ── Shimmer loading card ──────────────────────────────────────────────────────
+@Composable
+private fun ShimmerStationCard() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(140.dp),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = VoltCardBg),
+        border = BorderStroke(1.dp, VoltCardBorder)
+    ) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(18.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(VoltCardElevated.copy(alpha = alpha))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.45f)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(VoltCardElevated.copy(alpha = alpha))
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(
+                    modifier = Modifier
+                        .width(70.dp)
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(VoltCardElevated.copy(alpha = alpha))
+                )
+                Box(
+                    modifier = Modifier
+                        .width(70.dp)
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(VoltCardElevated.copy(alpha = alpha))
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(19.dp))
+                    .background(VoltCardElevated.copy(alpha = alpha))
+            )
+        }
+    }
+}
+
+// ── Station Card ──────────────────────────────────────────────────────────────
 @Composable
 fun StationDiscoveryCard(
     station: ChargingStation,
     onChargeClick: () -> Unit,
-    onFeedbackClick: () -> Unit = {}
+    onFeedbackClick: () -> Unit = {},
+    onViewOnMap: () -> Unit = {}
 ) {
     var isFavorite by remember { mutableStateOf(false) }
 
@@ -402,7 +960,7 @@ fun StationDiscoveryCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Distance & Price Row
+            // Distance & Price & Report Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -417,7 +975,7 @@ fun StationDiscoveryCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "${station.distanceKm} km",
+                        text = if (station.distanceKm > 0) "${station.distanceKm} km" else "Nearby",
                         color = VoltTextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
@@ -442,7 +1000,6 @@ fun StationDiscoveryCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Report button
                 Text(
                     text = "Report",
                     color = VoltCyan,
@@ -454,21 +1011,53 @@ fun StationDiscoveryCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // View Details / Start Charging Gradient Button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .clip(RoundedCornerShape(23.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(VoltGradientStart, VoltGradientEnd)
-                        )
-                    )
-                    .clickable { onChargeClick() },
-                contentAlignment = Alignment.Center
+            // Action buttons row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // View on Map button
+                Box(
+                    modifier = Modifier
+                        .weight(0.42f)
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(23.dp))
+                        .background(VoltCardElevated)
+                        .border(1.dp, VoltCardBorder, RoundedCornerShape(23.dp))
+                        .clickable { onViewOnMap() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Map,
+                            contentDescription = "View on Map",
+                            tint = VoltCyan,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Map",
+                            color = VoltCyan,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // View Details / Start Charging gradient button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(23.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(VoltGradientStart, VoltGradientEnd)
+                            )
+                        )
+                        .clickable { onChargeClick() },
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = "View Details ↗",
                         color = Color.White,
@@ -482,8 +1071,8 @@ fun StationDiscoveryCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 3: Active Charging Session View (Matching Screen 3 in Reference)
-// ──────────────────────────────────────────────────────────────────────────────────
+// SCREEN 3: Active Charging Session View
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun ActiveChargingSessionView(
     uiState: VoltUiState,
@@ -550,14 +1139,13 @@ private fun ActiveChargingSessionView(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Top Car Graphic & Radiant Energy Beam Visual
+        // Car Graphic & Radiant Energy Beam Visual
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(120.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Background radiant blue gradient beam
             Box(
                 modifier = Modifier
                     .width(100.dp)
@@ -574,7 +1162,6 @@ private fun ActiveChargingSessionView(
                     )
             )
 
-            // Car Icon / Graphic
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
                     imageVector = Icons.Default.DirectionsCar,
@@ -594,12 +1181,11 @@ private fun ActiveChargingSessionView(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 6 Metrics Badges (2 columns x 3 rows matching Screen 3)
+        // 6 Metrics Badges
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Row 1: Range added & Cost
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -618,7 +1204,6 @@ private fun ActiveChargingSessionView(
                 )
             }
 
-            // Row 2: Energy & Power
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -637,7 +1222,6 @@ private fun ActiveChargingSessionView(
                 )
             }
 
-            // Row 3: Time elapsed & Voltage
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -659,7 +1243,7 @@ private fun ActiveChargingSessionView(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Circular Glowing Progress Ring (Matching Screen 3)
+        // Circular Glowing Progress Ring
         Box(
             modifier = Modifier.size(190.dp),
             contentAlignment = Alignment.Center
@@ -670,7 +1254,6 @@ private fun ActiveChargingSessionView(
                 val radius = (size.width - strokeWidth) / 2
                 val center = Offset(size.width / 2, size.height / 2)
 
-                // Outer Soft Glow Track
                 drawCircle(
                     color = VoltTrackBg,
                     radius = radius,
@@ -678,7 +1261,6 @@ private fun ActiveChargingSessionView(
                     style = Stroke(width = strokeWidth)
                 )
 
-                // Active Royal Electric Blue Ring
                 val sweepAngle = 360f * (soc / 100f).coerceIn(0.05f, 1f)
                 drawArc(
                     brush = Brush.sweepGradient(
@@ -717,7 +1299,7 @@ private fun ActiveChargingSessionView(
 
         Spacer(modifier = Modifier.height(26.dp))
 
-        // Full Width Stop / Action Button
+        // Stop Charging Button
         Box(
             modifier = Modifier
                 .fillMaxWidth()

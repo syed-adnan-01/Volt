@@ -92,7 +92,7 @@ class VoltRepository {
     private val _telemetry = MutableStateFlow(createInitialTelemetry(sampleVehicles[0]))
     val telemetry: StateFlow<BatteryTelemetry> = _telemetry.asStateFlow()
 
-    private val _stations = MutableStateFlow(sampleStations)
+    private val _stations = MutableStateFlow<List<ChargingStation>>(emptyList())
     val stations: StateFlow<List<ChargingStation>> = _stations.asStateFlow()
 
     private val _activeTripPlan = MutableStateFlow(createDefaultTripPlan(sampleVehicles[0]))
@@ -524,9 +524,8 @@ class VoltRepository {
             try {
                 val ocmStations = OpenChargeMapClient.fetchStationsNearby(lat, lng, radiusKm)
                 if (ocmStations.isNotEmpty()) {
-                    val existingIds = _stations.value.map { it.id }.toSet()
-                    val newStations = ocmStations.filter { it.id !in existingIds }
-                    _stations.value = if (newStations.isNotEmpty()) _stations.value + newStations else _stations.value
+                    // Fully replace the list so only real nearby stations are shown
+                    _stations.value = ocmStations
                 }
             } catch (e: Exception) {
                 android.util.Log.w("VoltRepository", "OpenChargeMap nearby fetch failed: ${e.message}")

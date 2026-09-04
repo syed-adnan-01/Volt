@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
 import com.volt.android.data.LiveLocationTracker
+import com.volt.android.data.LocationHelper
 import com.volt.android.data.VoltRepository
 import com.volt.android.data.models.BatteryTelemetry
 import com.volt.android.data.models.ChargingStation
@@ -85,7 +86,8 @@ class VoltViewModel(
         if (AuthSessionManager.isAuthenticated.value) {
             viewModelScope.launch {
                 repository.loadVehicles()
-                repository.loadStations()
+                // Stations are loaded on-demand when the Chargers tab is opened
+                // via refreshStationsNearUser(context) to use the real GPS location
             }
         }
     }
@@ -333,6 +335,28 @@ class VoltViewModel(
     fun refreshStations(lat: Double = 37.7749, lng: Double = -122.4194) {
         viewModelScope.launch {
             repository.loadStations(lat, lng)
+        }
+    }
+
+    /**
+     * Fetches the user's real GPS location and then loads nearby EV charging
+     * stations from OpenChargeMap / backend around that position.
+     */
+    fun refreshStationsNearUser(context: Context) {
+        viewModelScope.launch {
+            try {
+                val coords = LocationHelper.getCurrentLocation(context)
+                _userLocation.value = LatLng(coords.latitude, coords.longitude)
+                repository.loadStations(
+                    lat = coords.latitude,
+                    lng = coords.longitude,
+                    radiusKm = 50.0
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("VoltViewModel", "Failed to get location for station refresh: ${e.message}")
+                // Fallback: load with default location
+                repository.loadStations()
+            }
         }
     }
 

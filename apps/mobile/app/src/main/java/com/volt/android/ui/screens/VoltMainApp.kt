@@ -25,6 +25,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,13 @@ fun VoltMainApp(
     val locationTracker = remember(context) { LiveLocationTracker(context) }
     val uiState by viewModel.uiState.collectAsState()
     var showProfileDialog by remember { mutableStateOf(false) }
+
+    // Auto-fetch real nearby stations when the Chargers tab is first opened
+    LaunchedEffect(uiState.currentTab) {
+        if (uiState.currentTab == VoltNavTab.CHARGERS && uiState.stations.isEmpty()) {
+            viewModel.refreshStationsNearUser(context)
+        }
+    }
 
     // ──────────────────────────────────────────────
     // 1. Show AuthScreen if not authenticated
@@ -226,6 +234,9 @@ fun VoltMainApp(
                     onSimulateFastCharge = { station -> viewModel.simulateCharge(15, station.powerKw.toDouble()) },
                     onSubmitFeedback = { stId, rating, plugs, wait, func, comment ->
                         viewModel.submitStationFeedback(stId, rating, plugs, wait, func, comment)
+                    },
+                    onRefreshNearby = {
+                        viewModel.refreshStationsNearUser(context)
                     }
                 )
                 VoltNavTab.SIMULATOR -> SimulatorScreen(
