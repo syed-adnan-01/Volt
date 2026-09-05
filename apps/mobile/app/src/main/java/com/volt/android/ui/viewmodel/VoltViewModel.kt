@@ -382,6 +382,17 @@ class VoltViewModel(
         }
     }
 
+    /**
+     * Re-fetches ML predictions (availability probability, wait time, Lyzr
+     * explanation) for all currently loaded stations and merges them in.
+     * Safe to call at any time — silently ignored if stations list is empty.
+     */
+    fun refreshMLPredictions() {
+        viewModelScope.launch {
+            repository.enrichStationsWithPredictions()
+        }
+    }
+
     fun submitStationFeedback(
         stationId: String,
         rating: Int,

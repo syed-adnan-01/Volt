@@ -14,7 +14,7 @@ object ApiClient {
      * Default base URL:
      * - `http://10.0.2.2:3000/` points to localhost:3000 on the Android Emulator host machine.
      */
-    private var baseUrl: String = "http://10.0.2.2:3000/"
+    private var baseUrl: String = "https://volt-api-z17u.onrender.com"
 
     private val json = Json {
         ignoreUnknownKeys = true

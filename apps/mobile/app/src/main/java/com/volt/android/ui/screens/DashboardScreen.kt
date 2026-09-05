@@ -667,6 +667,135 @@ fun DashboardScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // ──────────────────────────────────────────────
+        // 8b. AI Charger Intelligence (ML Predictions)
+        // Shows top 2 nearby stations enriched with availability model,
+        // wait-time model, and Lyzr agent explanation
+        // ──────────────────────────────────────────────
+        val mlStations = uiState.stations
+            .filter { it.availabilityProbability != null }
+            .sortedByDescending { it.availabilityProbability }
+            .take(2)
+
+        if (mlStations.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = VoltCardBg),
+                border = BorderStroke(1.dp, VoltCyan.copy(alpha = 0.25f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "✦",
+                            color = VoltCyan,
+                            fontSize = 14.sp,
+                            modifier = androidx.compose.ui.Modifier.padding(end = 6.dp)
+                        )
+                        Text(
+                            text = "AI Charger Intelligence",
+                            color = VoltTextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Availability predictions from ML model",
+                        color = VoltTextMuted,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    mlStations.forEachIndexed { idx, station ->
+                        if (idx > 0) Spacer(modifier = Modifier.height(10.dp))
+
+                        val pct = ((station.availabilityProbability ?: 0.0) * 100).toInt()
+                        val (barColor, labelColor, label) = when {
+                            pct >= 70 -> Triple(Color(0xFF4ADE80), Color(0xFF4ADE80), "🟢 $pct% likely available")
+                            pct >= 40 -> Triple(Color(0xFFFBBF24), Color(0xFFFBBF24), "🟡 $pct% availability")
+                            else      -> Triple(Color(0xFFF87171), Color(0xFFF87171), "🔴 $pct% availability")
+                        }
+
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = station.name,
+                                    color = VoltTextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = label,
+                                    color = labelColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Availability progress bar
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(VoltCardElevated)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(pct / 100f)
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(barColor)
+                                )
+                            }
+
+                            // Wait time + Lyzr explanation
+                            val wait = station.expectedWaitMinutes
+                            val lyzr = station.mlExplanation
+                            if (wait != null || !lyzr.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                if (wait != null) {
+                                    Text(
+                                        text = if (wait <= 1.0) "⏱ No queue expected" else "⏱ Est. wait: ~${wait.toInt()} min",
+                                        color = VoltTextSecondary,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                if (!lyzr.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF0C1E2B))
+                                            .border(1.dp, VoltCyan.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Text("✦ ", color = VoltCyan, fontSize = 9.sp)
+                                        Text(
+                                            text = lyzr,
+                                            color = VoltCyan.copy(alpha = 0.8f),
+                                            fontSize = 10.sp,
+                                            lineHeight = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // ──────────────────────────────────────────────
         // 9. Mini Route Map Preview (if available)
         // ──────────────────────────────────────────────
         val lastRouteGeometry = uiState.tripPlan.geometry

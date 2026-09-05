@@ -160,8 +160,13 @@ data class StationPredictionDto(
     @SerialName("station_id") val stationId: String,
     @SerialName("predicted_available_plugs") val predictedAvailablePlugs: Int? = null,
     @SerialName("availability_probability") val availabilityProbability: Double? = null,
+    @SerialName("expectedWaitMinutes") val expectedWaitMinutes: Double? = null,
     @SerialName("predicted_wait_minutes") val predictedWaitMinutes: Double? = null,
-    @SerialName("confidence_score") val confidenceScore: Double? = null
+    @SerialName("reliabilityScore") val reliabilityScore: Double? = null,
+    @SerialName("confidence_score") val confidenceScore: Double? = null,
+    @SerialName("confidence") val confidence: Double? = null,
+    @SerialName("modelVersion") val modelVersion: String? = null,
+    @SerialName("explanation") val explanation: String? = null  // Lyzr AI agent output
 )
 
 @Serializable

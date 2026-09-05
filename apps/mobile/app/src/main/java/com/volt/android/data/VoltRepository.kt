@@ -566,6 +566,9 @@ class VoltRepository {
                             )
                         }
                         _stations.value = liveStations
+                        _isLoading.value = false
+                        // Fire-and-forget: enrich each station with ML predictions
+                        enrichStationsWithPredictions()
                         return@withContext
                     }
                 }
@@ -579,12 +582,49 @@ class VoltRepository {
                 if (ocmStations.isNotEmpty()) {
                     // Fully replace the list so only real nearby stations are shown
                     _stations.value = ocmStations
+                    // Enrich OCM stations with ML predictions too
+                    enrichStationsWithPredictions()
                 }
             } catch (e: Exception) {
                 android.util.Log.w("VoltRepository", "OpenChargeMap nearby fetch failed: ${e.message}")
             } finally {
                 _isLoading.value = false
             }
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    // 4b. ML Prediction Enrichment
+    // Fetches availability probability, wait time, and Lyzr explanation for each
+    // station and merges the results into the existing _stations StateFlow.
+    // This runs after stations are already shown — it never blocks the UI.
+    // ──────────────────────────────────────────────
+    suspend fun enrichStationsWithPredictions() {
+        withContext(Dispatchers.IO) {
+            val current = _stations.value
+            if (current.isEmpty()) return@withContext
+
+            val enriched = current.map { station ->
+                try {
+                    val resp = ApiClient.apiService.getStationPredictions(station.id)
+                    if (resp.isSuccessful && resp.body()?.success == true && resp.body()?.data != null) {
+                        val pred = resp.body()!!.data!!
+                        station.copy(
+                            availabilityProbability = pred.availabilityProbability,
+                            expectedWaitMinutes = pred.predictedWaitMinutes
+                                ?: pred.expectedWaitMinutes,
+                            reliabilityScore = pred.reliabilityScore,
+                            predictionConfidence = pred.confidenceScore
+                                ?: pred.confidence,
+                            mlExplanation = pred.explanation
+                        )
+                    } else station
+                } catch (e: Exception) {
+                    android.util.Log.d("VoltRepository", "Prediction fetch failed for ${station.id}: ${e.message}")
+                    station
+                }
+            }
+            _stations.value = enriched
         }
     }
 

@@ -68,7 +68,13 @@ data class ChargingStation(
     @SerialName("distance_km") val distanceKm: Double,
     @SerialName("latitude") val latitude: Double? = null,
     @SerialName("longitude") val longitude: Double? = null,
-    @SerialName("is_reachable") val isReachable: Boolean = true
+    @SerialName("is_reachable") val isReachable: Boolean = true,
+    // ── ML Prediction Fields (from Member 4's availability + wait-time models) ──
+    @SerialName("availability_probability") val availabilityProbability: Double? = null, // 0.0-1.0
+    @SerialName("expected_wait_minutes") val expectedWaitMinutes: Double? = null,         // minutes
+    @SerialName("reliability_score") val reliabilityScore: Double? = null,                // 0.0-1.0
+    @SerialName("prediction_confidence") val predictionConfidence: Double? = null,        // 0.0-1.0
+    @SerialName("ml_explanation") val mlExplanation: String? = null                       // Lyzr agent sentence
 ) {
     val network: String
         get() = operator

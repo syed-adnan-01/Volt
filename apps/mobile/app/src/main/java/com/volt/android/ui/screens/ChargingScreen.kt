@@ -1009,6 +1009,99 @@ fun StationDiscoveryCard(
                 )
             }
 
+            // ── ML Prediction Band ────────────────────────────────────────────
+            val availProb = station.availabilityProbability
+            val waitMins  = station.expectedWaitMinutes
+            val lyzrText  = station.mlExplanation
+
+            if (availProb != null || waitMins != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Availability probability pill
+                    if (availProb != null) {
+                        val pct = (availProb * 100).toInt()
+                        val (pillBg, pillLabel, pillColor) = when {
+                            pct >= 70 -> Triple(Color(0xFF0D2318), "🟢 $pct% Available", Color(0xFF4ADE80))
+                            pct >= 40 -> Triple(Color(0xFF201800), "🟡 $pct% Available", Color(0xFFFBBF24))
+                            else      -> Triple(Color(0xFF1F0A0A), "🔴 $pct% Available", Color(0xFFF87171))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(pillBg)
+                                .border(1.dp, pillColor.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = pillLabel,
+                                color = pillColor,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Wait time chip
+                    if (waitMins != null) {
+                        val waitLabel = if (waitMins <= 1.0) "No queue" else "~${waitMins.toInt()} min wait"
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(VoltCardElevated)
+                                .border(1.dp, VoltCardBorder, RoundedCornerShape(20.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccessTime,
+                                contentDescription = "Wait",
+                                tint = VoltAmber,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = waitLabel,
+                                color = VoltTextSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                // Lyzr AI explanation bubble
+                if (!lyzrText.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0C1E2B))
+                            .border(1.dp, VoltCyan.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = "✦",
+                            color = VoltCyan,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 1.dp, end = 6.dp)
+                        )
+                        Text(
+                            text = lyzrText,
+                            color = VoltCyan.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
 
             // Action buttons row

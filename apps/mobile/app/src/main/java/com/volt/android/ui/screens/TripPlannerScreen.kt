@@ -2,6 +2,7 @@ package com.volt.android.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1216,51 +1217,99 @@ fun TripPlannerScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 plan.stops.forEachIndexed { index, stop ->
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 4.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(
-                                    when (stop.type) {
-                                        StopType.ORIGIN -> VoltCyan
-                                        StopType.CHARGER_STOP -> VoltAmber
-                                        StopType.DESTINATION -> VoltEmerald
-                                    },
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "${index + 1}",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stop.name,
-                                color = VoltTextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            if (stop.type == StopType.CHARGER_STOP) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(
+                                        when (stop.type) {
+                                            StopType.ORIGIN -> VoltCyan
+                                            StopType.CHARGER_STOP -> VoltAmber
+                                            StopType.DESTINATION -> VoltEmerald
+                                        },
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = "Arrive @ ${stop.arrivalSoC.toInt()}% ➔ Charge to ${stop.departureSoC.toInt()}% (+${stop.chargeDurationMinutes} min, +${stop.energyAddedKWh} kWh)",
-                                    color = VoltAmber,
-                                    fontSize = 11.sp
+                                    text = "${index + 1}",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
-                            } else {
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                // Stop name + availability pill
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = stop.name,
+                                        color = VoltTextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                if (stop.type == StopType.CHARGER_STOP) {
+                                    Text(
+                                        text = "Arrive @ ${stop.arrivalSoC.toInt()}% ➔ Charge to ${stop.departureSoC.toInt()}% (+${stop.chargeDurationMinutes} min, +${stop.energyAddedKWh} kWh)",
+                                        color = VoltAmber,
+                                        fontSize = 11.sp
+                                    )
+                                    // Predicted queue wait
+                                    if (stop.expectedWaitMinutes > 0) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "⏱ Est. Queue: ",
+                                                color = VoltTextSecondary,
+                                                fontSize = 10.sp
+                                            )
+                                            Text(
+                                                text = if (stop.expectedWaitMinutes <= 1) "No wait" else "~${stop.expectedWaitMinutes} min",
+                                                color = if (stop.expectedWaitMinutes <= 5) VoltEmerald else VoltAmber,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = "${stop.distanceFromOriginKm.toInt()} km • ${stop.arrivalSoC.toInt()}% SoC",
+                                        color = VoltTextSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                        // Lyzr explanation for this stop — look up matched station ML explanation
+                        val stopStation = uiState.stations.firstOrNull { it.id == stop.stationId }
+                        val stopLyzr = stopStation?.mlExplanation
+                        if (stop.type == StopType.CHARGER_STOP && !stopLyzr.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .padding(start = 34.dp)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF0C1E2B))
+                                    .border(1.dp, VoltCyan.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text("✦ ", color = VoltCyan, fontSize = 10.sp)
                                 Text(
-                                    text = "${stop.distanceFromOriginKm.toInt()} km • ${stop.arrivalSoC.toInt()}% SoC",
-                                    color = VoltTextSecondary,
-                                    fontSize = 11.sp
+                                    text = stopLyzr,
+                                    color = VoltCyan.copy(alpha = 0.85f),
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
                                 )
                             }
                         }
