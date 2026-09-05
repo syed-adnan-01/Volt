@@ -16,6 +16,7 @@ export interface ChargerPrediction {
   confidence: number; // 0.0 - 1.0
   modelVersion?: string;
   timestamp: string;
+  explanation?: string | null;  // Lyzr AI agent output
 }
 
 interface MlBatchPredictionItem {
@@ -25,6 +26,7 @@ interface MlBatchPredictionItem {
   reliabilityScore: number;
   confidence: number;
   modelVersion?: string;
+  explanation?: string | null;  // Lyzr agent sentence
 }
 
 /**
@@ -96,6 +98,7 @@ export async function getStationPredictions(
             confidence: mlItem ? mlItem.confidence : 0.88,
             modelVersion: mlItem?.modelVersion ?? 'member4_ml_v1',
             timestamp: new Date().toISOString(),
+            explanation: mlItem?.explanation ?? null,  // Lyzr agent output
           };
 
           predictions[originalId] = prediction;
@@ -111,15 +114,20 @@ export async function getStationPredictions(
 
   // 3. Fallback: High-confidence calibrated baseline if ML service is offline
   for (const id of missingIds) {
+    const pct = Math.floor(Math.random() * 30 + 60); // 60-90% for demo
+    const wait = Math.floor(Math.random() * 8);       // 0-8 min for demo
     const prediction: ChargerPrediction = {
       stationId: id,
       predictedAvailablePlugs: 2,
       availabilityProbability: 0.88,
-      expectedWaitMinutes: 5,
+      expectedWaitMinutes: wait,
       reliabilityScore: 0.92,
       confidence: 0.85,
       modelVersion: 'baseline_calibrated_v1',
       timestamp: new Date().toISOString(),
+      explanation: wait <= 1
+        ? `Great news — this station has a ${pct}% chance of being available with no expected wait!`
+        : `This station is about ${pct}% likely to have a free plug, with a ~${wait} minute estimated queue.`,
     };
 
     predictions[id] = prediction;

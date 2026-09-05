@@ -609,18 +609,24 @@ class VoltRepository {
                     val resp = ApiClient.apiService.getStationPredictions(station.id)
                     if (resp.isSuccessful && resp.body()?.success == true && resp.body()?.data != null) {
                         val pred = resp.body()!!.data!!
+                        android.util.Log.i("MLPredictions",
+                            "✅ [${station.name}] avail=${pred.availabilityProbability} " +
+                            "wait=${pred.expectedWaitMinutes} explanation=${pred.explanation}")
                         station.copy(
                             availabilityProbability = pred.availabilityProbability,
-                            expectedWaitMinutes = pred.predictedWaitMinutes
-                                ?: pred.expectedWaitMinutes,
+                            expectedWaitMinutes = pred.expectedWaitMinutes
+                                ?: pred.predictedWaitMinutes,
                             reliabilityScore = pred.reliabilityScore,
-                            predictionConfidence = pred.confidenceScore
-                                ?: pred.confidence,
+                            predictionConfidence = pred.confidence,
                             mlExplanation = pred.explanation
                         )
-                    } else station
+                    } else {
+                        android.util.Log.w("MLPredictions",
+                            "⚠️ [${station.name}] response not ok: success=${resp.body()?.success} data=${resp.body()?.data}")
+                        station
+                    }
                 } catch (e: Exception) {
-                    android.util.Log.d("VoltRepository", "Prediction fetch failed for ${station.id}: ${e.message}")
+                    android.util.Log.e("MLPredictions", "❌ Prediction fetch failed for ${station.id}: ${e.message}")
                     station
                 }
             }
