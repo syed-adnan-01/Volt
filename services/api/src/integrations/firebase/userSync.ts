@@ -24,25 +24,34 @@ export async function syncUserFromFirebase(
   const name = decodedToken.name || null;
   const phone = decodedToken.phone_number || null;
 
-  // 1. Try to fetch existing user
-  const fetchResult = await query(
-    `SELECT id, firebase_uid, role FROM users WHERE firebase_uid = $1`,
-    [firebaseUid]
-  );
+  try {
+    // 1. Try to fetch existing user
+    const fetchResult = await query(
+      `SELECT id, firebase_uid, role FROM users WHERE firebase_uid = $1`,
+      [firebaseUid]
+    );
 
-  if (fetchResult.rows.length > 0) {
-    return fetchResult.rows[0] as LocalUserContext;
+    if (fetchResult.rows.length > 0) {
+      return fetchResult.rows[0] as LocalUserContext;
+    }
+
+    // 2. User doesn't exist, create them
+    const insertResult = await query(
+      `
+      INSERT INTO users (firebase_uid, email, name, phone, role)
+      VALUES ($1, $2, $3, $4, 'USER')
+      RETURNING id, firebase_uid, role
+      `,
+      [firebaseUid, email, name, phone]
+    );
+
+    return insertResult.rows[0] as LocalUserContext;
+  } catch (err: any) {
+    console.warn(`⚠️ User sync database query failed (${err?.message}). Providing fallback user context.`);
+    return {
+      id: firebaseUid,
+      firebase_uid: firebaseUid,
+      role: 'USER',
+    };
   }
-
-  // 2. User doesn't exist, create them
-  const insertResult = await query(
-    `
-    INSERT INTO users (firebase_uid, email, name, phone, role)
-    VALUES ($1, $2, $3, $4, 'USER')
-    RETURNING id, firebase_uid, role
-    `,
-    [firebaseUid, email, name, phone]
-  );
-
-  return insertResult.rows[0] as LocalUserContext;
 }

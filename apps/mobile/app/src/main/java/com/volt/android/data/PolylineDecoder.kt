@@ -350,7 +350,7 @@ object PolylineDecoder {
     /**
      * Approximate Haversine distance in meters between two LatLng points.
      */
-    private fun distanceMeters(p1: LatLng, p2: LatLng): Double {
+    fun distanceMeters(p1: LatLng, p2: LatLng): Double {
         val r = 6371000.0 // Earth radius in meters
         val lat1Rad = Math.toRadians(p1.latitude)
         val lat2Rad = Math.toRadians(p2.latitude)

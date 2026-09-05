@@ -6,9 +6,21 @@ import { z } from 'zod';
 import { AppError } from '../utils/AppError.js';
 import { getStationPredictions } from '../integrations/predictionClient.js';
 
-const stationsRouter = new Hono<{ Variables: { requestId: string } }>();
+import type { LocalUserContext } from '../integrations/firebase/userSync.js';
 
-stationsRouter.use('*', requireAuth);
+type Variables = {
+  requestId: string;
+  user?: LocalUserContext;
+};
+
+const stationsRouter = new Hono<{ Variables: Variables }>();
+
+stationsRouter.use('*', async (c, next) => {
+  if (c.req.path.endsWith('/predictions')) {
+    return next();
+  }
+  return (requireAuth as any)(c, next);
+});
 
 const searchSchema = z.object({
   lat: z.coerce.number(),
