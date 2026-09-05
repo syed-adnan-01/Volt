@@ -149,46 +149,21 @@ fun AuthScreen(
                         account.idToken
                     )
                 } else {
-                    // Fallback to auto-created Google profile
-                    onGoogleSignInSuccess("Syed Adnan", "driver.google@gmail.com", "google-oauth-token")
+                    onGoogleSignInError("Failed to retrieve Google account details.")
                 }
             } catch (e: ApiException) {
                 if (e.statusCode == 12501) {
                     onGoogleSignInError("Google Sign-In was cancelled.")
                 } else {
-                    // Automatically create Google profile for test/emulator environment
-                    onGoogleSignInSuccess("Syed Adnan", "driver.google@gmail.com", "google-oauth-token")
+                    onGoogleSignInError("Google Sign-In error (Code ${e.statusCode}). Make sure SHA-1 fingerprint is registered in Firebase.")
                 }
             } catch (e: Exception) {
-                onGoogleSignInSuccess("Syed Adnan", "driver.google@gmail.com", "google-oauth-token")
+                onGoogleSignInError(e.localizedMessage ?: "Google Sign-In failed.")
             }
         } else if (result.resultCode == Activity.RESULT_CANCELED) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                if (account != null && !account.email.isNullOrBlank()) {
-                    val displayName = account.displayName
-                        ?: account.givenName
-                        ?: account.email!!.substringBefore("@").replace(".", " ")
-                    onGoogleSignInSuccess(
-                        displayName,
-                        account.email!!,
-                        account.idToken
-                    )
-                } else {
-                    onGoogleSignInError("Google Sign-In was cancelled.")
-                }
-            } catch (e: ApiException) {
-                if (e.statusCode == 12501) {
-                    onGoogleSignInError("Google Sign-In was cancelled.")
-                } else {
-                    // Play Services not configured on device/emulator: auto-sign in
-                    onGoogleSignInSuccess("Syed Adnan", "driver.google@gmail.com", "google-oauth-token")
-                }
-            } catch (e: Exception) {
-                // If Play Services is not available, auto-create profile seamlessly
-                onGoogleSignInSuccess("Syed Adnan", "driver.google@gmail.com", "google-oauth-token")
-            }
+            onGoogleSignInError("Google Sign-In was cancelled.")
+        } else {
+            onGoogleSignInError("Google Sign-In returned error code ${result.resultCode}")
         }
     }
 
@@ -680,7 +655,7 @@ fun AuthScreen(
                     try {
                         googleSignInLauncher.launch(googleSignInClient.signInIntent)
                     } catch (e: Exception) {
-                        onGoogleSignInSuccess("Syed Adnan", "driver.google@gmail.com", "google-oauth-token")
+                        onGoogleSignInError(e.localizedMessage ?: "Unable to launch Google Sign-In.")
                     }
                 },
                 enabled = !isLoading,

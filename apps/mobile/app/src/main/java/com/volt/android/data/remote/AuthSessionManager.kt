@@ -141,10 +141,7 @@ object AuthSessionManager {
     }
 
     fun signInWithGoogle(): Result<UserProfile> {
-        return signInWithGoogleAccount(
-            name = "Adnan Syed (Google Connected)",
-            email = "driver.google@gmail.com"
-        )
+        return Result.failure(IllegalStateException("Please authenticate using the Google Sign-In option."))
     }
 
     fun signOut() {
