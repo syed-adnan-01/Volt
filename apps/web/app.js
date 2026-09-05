@@ -5,14 +5,6 @@
 // ══════════════════════════════════════════════
 // FIREBASE AUTH — Google Sign-In
 // ══════════════════════════════════════════════
-//
-// ⚠️  SETUP REQUIRED:
-//   1. Go to https://console.firebase.google.com → Your project (volt-6d900)
-//   2. Project Settings → General → Your apps → Web app → "SDK setup and configuration"
-//   3. Copy the firebaseConfig object and paste it below.
-//   4. In Firebase Console → Authentication → Sign-in method → enable "Google"
-//   5. In Authentication → Settings → Authorized domains → add "localhost"
-//
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyAS3D-zrIXJLBKY_ago8yGFy9Q2GJ7aUnQ",
   authDomain:        "volt-6d900.firebaseapp.com",
@@ -23,25 +15,52 @@ const FIREBASE_CONFIG = {
   measurementId:     "G-4WTB2SMDF9",
 };
 
-(function initFirebaseAuth() {
-  // Guard: skip if Firebase SDK didn't load (e.g. offline) or config not filled
+// Run auth setup after DOM is fully ready
+document.addEventListener('DOMContentLoaded', () => {
+  // ── Guard: Firebase SDK not loaded ───────────
   if (typeof firebase === 'undefined') {
-    console.warn('Firebase SDK not loaded — running in demo mode without auth.');
+    console.warn('Firebase SDK not loaded — demo mode.');
     dismissLoginScreen();
     return;
   }
 
-  const isConfigured = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_WEB_API_KEY';
-  if (!isConfigured) {
-    console.warn('Firebase config not set — running in demo mode. See app.js for setup instructions.');
-    dismissLoginScreen();
-    return;
+  // ── Initialize Firebase (safe re-init guard) ──
+  if (!firebase.apps.length) {
+    firebase.initializeApp(FIREBASE_CONFIG);
   }
-
-  firebase.initializeApp(FIREBASE_CONFIG);
   const auth = firebase.auth();
 
-  // ── Auth state observer ────────────────────
+  // Show "Checking session…" on login screen while Firebase resolves
+  const loginBtn = document.getElementById('btn-google-signin');
+  const loginErr = document.getElementById('login-error');
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'Checking session…';
+
+  // ── Handle redirect result (called after Google redirects back) ──
+  auth.getRedirectResult()
+    .then((result) => {
+      // result.user is non-null when returning from a Google redirect
+      // onAuthStateChanged below will also fire — no extra handling needed
+    })
+    .catch((err) => {
+      loginErr.textContent = err.message || 'Sign-in failed. Please try again.';
+    })
+    .finally(() => {
+      // Re-enable button whether redirect result succeeded or not
+      loginBtn.disabled = false;
+      loginBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        Continue with Google`;
+    });
+
+  // ── Auth state: source of truth ───────────────
+  // Fires immediately if user is already signed in (persistent session),
+  // OR after getRedirectResult() resolves with a new user.
   auth.onAuthStateChanged((user) => {
     if (user) {
       onSignedIn(user);
@@ -50,23 +69,20 @@ const FIREBASE_CONFIG = {
     }
   });
 
-  // ── Google Sign-In button ──────────────────
-  document.getElementById('btn-google-signin').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-google-signin');
-    const errEl = document.getElementById('login-error');
-    errEl.textContent = '';
-    btn.disabled = true;
-    btn.textContent = 'Signing in…';
+  // ── Sign-In button → redirect to Google ───────
+  loginBtn.addEventListener('click', () => {
+    loginErr.textContent = '';
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Redirecting to Google…';
 
-    try {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      await auth.signInWithPopup(provider);
-      // onAuthStateChanged will fire → onSignedIn()
-    } catch (err) {
-      errEl.textContent = err.message || 'Sign-in failed. Please try again.';
-      btn.disabled = false;
-      btn.innerHTML = `
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    // signInWithRedirect is reliable on all browsers — no popup to block
+    auth.signInWithRedirect(provider).catch((err) => {
+      loginErr.textContent = err.message || 'Sign-in failed. Please try again.';
+      loginBtn.disabled = false;
+      loginBtn.innerHTML = `
         <svg width="20" height="20" viewBox="0 0 48 48">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
           <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -74,38 +90,41 @@ const FIREBASE_CONFIG = {
           <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
         </svg>
         Continue with Google`;
-    }
+    });
   });
 
-  // ── Sign-out button ────────────────────────
+  // ── Sign-out ───────────────────────────────────
   document.getElementById('btn-signout').addEventListener('click', async () => {
     await auth.signOut();
     // onAuthStateChanged fires → showLoginScreen()
   });
-})();
+});
 
-/** Called when Firebase resolves a signed-in user */
+// ─────────────────────────────────────────────────────────
+// Called when Firebase confirms a signed-in user
+// ─────────────────────────────────────────────────────────
 function onSignedIn(user) {
   dismissLoginScreen();
 
-  const chip       = document.getElementById('user-chip');
-  const avatarImg  = document.getElementById('user-avatar-img');
-  const initials   = document.getElementById('user-avatar-initials');
-  const nameEl     = document.getElementById('user-display-name');
+  const chip      = document.getElementById('user-chip');
+  const avatarImg = document.getElementById('user-avatar-img');
+  const initials  = document.getElementById('user-avatar-initials');
+  const nameEl    = document.getElementById('user-display-name');
 
-  // Display name (Google display name)
-  const displayName = user.displayName || user.email || 'User';
+  // Use Google display name, fall back to email prefix
+  const displayName = user.displayName
+    || (user.email ? user.email.split('@')[0] : 'User');
+
   nameEl.textContent = displayName;
-  nameEl.title = user.email || '';
+  nameEl.title = `${displayName}\n${user.email || ''}`;
 
-  // Avatar: try photo URL first, fall back to initials
+  // Photo URL from Google profile
   if (user.photoURL) {
     avatarImg.src = user.photoURL;
     avatarImg.alt = displayName;
     avatarImg.style.display = 'block';
     initials.style.display = 'none';
     avatarImg.onerror = () => {
-      // Photo failed to load (e.g. CORS) — show initials instead
       avatarImg.style.display = 'none';
       initials.style.display = 'flex';
       initials.textContent = getInitials(displayName);
@@ -117,10 +136,13 @@ function onSignedIn(user) {
   }
 
   chip.style.display = 'flex';
+
+  console.log(`✅ Signed in as: ${displayName} (${user.email})`);
 }
 
 function showLoginScreen() {
   const screen = document.getElementById('login-screen');
+  screen.style.display = 'flex';
   screen.classList.remove('hidden');
   document.getElementById('user-chip').style.display = 'none';
 }
@@ -128,8 +150,7 @@ function showLoginScreen() {
 function dismissLoginScreen() {
   const screen = document.getElementById('login-screen');
   screen.classList.add('hidden');
-  // Remove from DOM after transition completes so it doesn't block clicks
-  setTimeout(() => { if (screen) screen.style.display = 'none'; }, 600);
+  setTimeout(() => { screen.style.display = 'none'; }, 600);
 }
 
 function getInitials(name) {
@@ -140,6 +161,7 @@ function getInitials(name) {
     .map((w) => w[0].toUpperCase())
     .join('');
 }
+
 
 // Static Seed Data Reference
 const SEEDED_STATIONS = [

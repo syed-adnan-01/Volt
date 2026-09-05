@@ -19,10 +19,11 @@ const MIME_TYPES = {
 };
 
 // Target microservices
+// Use environment variables when deployed (Render), fall back to localhost for dev
 const TARGETS = {
-  '/api/core': 'http://localhost:3000',
-  '/api/routing': 'http://localhost:3001',
-  '/api/ml': 'http://localhost:8000',
+  '/api/core':    process.env.API_URL      || 'http://localhost:3000',
+  '/api/routing': process.env.ROUTING_URL  || 'http://localhost:3001',
+  '/api/ml':      process.env.ML_URL       || 'http://localhost:8000',
 };
 
 function proxyRequest(req, res, targetBase, targetPath) {
