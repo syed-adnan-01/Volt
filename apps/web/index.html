@@ -15,8 +15,187 @@
   
   <!-- Styles -->
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    /* ── Login Screen ── */
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: radial-gradient(ellipse at 30% 20%, rgba(99,102,241,0.18) 0%, transparent 60%),
+                  radial-gradient(ellipse at 75% 80%, rgba(6,182,212,0.14) 0%, transparent 55%),
+                  #0a0f1e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0;
+      transition: opacity 0.5s ease;
+    }
+    #login-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .login-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 48px 40px;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+    }
+    .login-logo {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .login-logo svg {
+      width: 28px;
+      height: 28px;
+      fill: #fff;
+    }
+    .login-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+    .login-subtitle {
+      font-size: 14px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 36px;
+      line-height: 1.5;
+    }
+    .btn-google {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px 24px;
+      background: #fff;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .btn-google:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .btn-google:active { transform: translateY(0); }
+    .btn-google svg { flex-shrink: 0; }
+    .login-error {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #f87171;
+      min-height: 20px;
+    }
+    .login-note {
+      margin-top: 24px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      line-height: 1.6;
+    }
+
+    /* ── User chip in header ── */
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 99px;
+      padding: 4px 12px 4px 4px;
+      cursor: default;
+      position: relative;
+    }
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid rgba(99,102,241,0.6);
+      background: rgba(99,102,241,0.2);
+    }
+    .user-avatar-initials {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .user-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      max-width: 140px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .btn-signout {
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #f87171;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: background 0.15s;
+    }
+    .btn-signout:hover { background: rgba(239,68,68,0.22); }
+  </style>
 </head>
 <body>
+
+<!-- ══ LOGIN SCREEN OVERLAY ══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    </div>
+    <div class="login-title">VOLT Mission Control</div>
+    <div class="login-subtitle">AI-Powered EV Journey Platform<br>Sign in to access your dashboard</div>
+
+    <button class="btn-google" id="btn-google-signin">
+      <!-- Google logo SVG -->
+      <svg width="20" height="20" viewBox="0 0 48 48">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      Continue with Google
+    </button>
+
+    <div class="login-error" id="login-error"></div>
+    <div class="login-note">Your Google account photo, name, and email will be displayed on the dashboard.</div>
+  </div>
+</div>
 
 <div class="app-container">
   <!-- Top Navigation Bar -->
@@ -44,8 +223,8 @@
       <button class="nav-tab" data-tab="system">System Health</button>
     </nav>
 
-    <!-- Telemetry Status Badges -->
-    <div class="system-telemetry">
+    <!-- Telemetry Status Badges + User Chip -->
+    <div class="system-telemetry" style="display: flex; align-items: center; gap: 8px;">
       <div class="telemetry-chip" id="chip-api">
         <span class="status-dot" id="dot-api"></span> API :3000
       </div>
@@ -54,6 +233,14 @@
       </div>
       <div class="telemetry-chip" id="chip-ml">
         <span class="status-dot" id="dot-ml"></span> ML :8000
+      </div>
+
+      <!-- Signed-in user chip -->
+      <div class="user-chip" id="user-chip" style="display: none;">
+        <div class="user-avatar-initials" id="user-avatar-initials"></div>
+        <img class="user-avatar" id="user-avatar-img" src="" alt="" style="display:none;" referrerpolicy="no-referrer">
+        <span class="user-name" id="user-display-name"></span>
+        <button class="btn-signout" id="btn-signout">Sign out</button>
       </div>
     </div>
   </header>
@@ -498,6 +685,9 @@
   </main>
 </div>
 
+<!-- Firebase JS SDK (compat - works without bundler) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <!-- Application Script -->
