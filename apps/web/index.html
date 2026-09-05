@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VOLT — AI-Powered EV Journey Platform</title>
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <!-- Top Navigation Bar -->
+  <header class="top-nav">
+    <div class="brand-container">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+        </svg>
+      </div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="brand-title">VOLT</span>
+          <span class="brand-badge">Mission Control</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="tab-navigation">
+      <button class="nav-tab active" data-tab="overview">Live Map & Stations</button>
+      <button class="nav-tab" data-tab="planner">Trip Planner</button>
+      <button class="nav-tab" data-tab="ml">ML Intelligence</button>
+      <button class="nav-tab" data-tab="vehicles">Fleet & Vehicles</button>
+      <button class="nav-tab" data-tab="system">System Health</button>
+    </nav>
+
+    <!-- Telemetry Status Badges -->
+    <div class="system-telemetry">
+      <div class="telemetry-chip" id="chip-api">
+        <span class="status-dot" id="dot-api"></span> API :3000
+      </div>
+      <div class="telemetry-chip" id="chip-routing">
+        <span class="status-dot" id="dot-routing"></span> Routing :3001
+      </div>
+      <div class="telemetry-chip" id="chip-ml">
+        <span class="status-dot" id="dot-ml"></span> ML :8000
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-wrapper">
+
+    <!-- KPI Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">Active Chargers</span>
+        <span class="stat-value" id="kpi-chargers">3</span>
+        <span class="stat-desc">San Francisco Bay Area</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Max Charging Speed</span>
+        <span class="stat-value">350 <span style="font-size: 16px;">kW</span></span>
+        <span class="stat-desc">Ultra-Fast DC Fast Charging</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">ML Model Engine</span>
+        <span class="stat-value" id="kpi-model">v1 Active</span>
+        <span class="stat-desc">Availability & Wait Predictor</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Active Vehicle</span>
+        <span class="stat-value" id="kpi-vehicle">Tesla M3</span>
+        <span class="stat-desc">75 kWh • 97.4% Health</span>
+      </div>
+    </div>
+
+    <!-- TAB 1: OVERVIEW & MAP -->
+    <section class="tab-pane active" id="tab-overview">
+      <div class="dashboard-grid">
+        <!-- Interactive Map -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>⚡ Interactive Charger Grid & Coverage</span>
+            <span style="font-size: 12px; color: var(--volt-cyan);">Live PostGIS Spatial Index</span>
+          </div>
+          <div id="map"></div>
+        </div>
+
+        <!-- Real-Time Battery & State -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>🔋 Vehicle Battery Intelligence</span>
+            <span style="font-size: 12px; color: var(--volt-emerald);">Live Telemetry</span>
+          </div>
+
+          <div class="battery-gauge-wrapper">
+            <div class="battery-circle" id="battery-gauge" style="--soc: 80;">
+              <div class="battery-inner">
+                <div class="battery-soc-text" id="battery-text">80%</div>
+                <div class="battery-subtext">Estimated SoC</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span style="color: var(--text-secondary);">Vehicle Model</span>
+              <strong id="veh-model-name">Tesla Model 3 Long Range</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span style="color: var(--text-secondary);">Usable Capacity</span>
+              <strong>72.0 kWh / 75.0 kWh</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span style="color: var(--text-secondary);">Avg. Consumption</span>
+              <strong>0.150 kWh / km</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span style="color: var(--text-secondary);">Estimated Safe Range</span>
+              <strong style="color: var(--volt-emerald);">~384 km</strong>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <label class="form-label">Simulate Battery SoC (%)</label>
+            <input type="range" min="5" max="100" value="80" id="soc-slider" class="form-control" style="cursor: pointer;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Charging Stations List -->
+      <div class="glass-card">
+        <div class="card-title">
+          <span>📍 Seeded Bay Area Charging Hubs</span>
+          <button class="btn btn-secondary" id="btn-refresh-stations" style="font-size: 12px; padding: 6px 14px;">
+            🔄 Refresh Stations
+          </button>
+        </div>
+        <div class="station-grid" id="stations-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: TRIP PLANNER -->
+    <section class="tab-pane" id="tab-planner">
+      <div class="dashboard-grid">
+        <div class="glass-card">
+          <div class="card-title">
+            <span>🗺️ AI Multi-Stop EV Journey Optimizer</span>
+            <span style="font-size: 12px; color: var(--volt-emerald);">Microservice :3001</span>
+          </div>
+
+          <form id="trip-planner-form">
+            <div class="form-group">
+              <label class="form-label">Starting Point (Origin)</label>
+              <select class="form-select" id="plan-origin">
+                <option value="-122.4194,37.7749" selected>San Francisco, CA (Market St)</option>
+                <option value="-122.2711,37.8044">Oakland, CA (Downtown)</option>
+                <option value="-122.0842,37.4220">Mountain View, CA (Googleplex)</option>
+                <option value="-121.8863,37.3382">San Jose, CA (SAP Center)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Destination</label>
+              <select class="form-select" id="plan-destination">
+                <option value="-122.1430,37.4419" selected>Palo Alto, CA (Stanford / Silicon Expy)</option>
+                <option value="-121.8863,37.3382">San Jose, CA (Tech Corridor)</option>
+                <option value="-122.4194,37.7749">San Francisco, CA</option>
+              </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="form-group">
+                <label class="form-label">Selected EV</label>
+                <select class="form-select" id="plan-vehicle">
+                  <option value="tesla">Tesla Model 3 Long Range (75 kWh)</option>
+                  <option value="hyundai">Hyundai Ioniq 5 Long Range (77.4 kWh)</option>
+                  <option value="porsche">Porsche Taycan 4S (93.4 kWh)</option>
+                  <option value="tata">Tata Nexon EV Max (40.5 kWh)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Departure SoC (%)</label>
+                <input type="number" class="form-control" id="plan-soc" value="45" min="10" max="100">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" id="btn-calc-route">
+              🚀 Optimize Journey & Charging Stops
+            </button>
+          </form>
+        </div>
+
+        <!-- Route Results Card -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>📊 Journey Plan Output</span>
+            <span id="route-badge" class="badge-available">Ready</span>
+          </div>
+
+          <div id="route-results-content">
+            <p style="color: var(--text-secondary); font-size: 14px;">
+              Select your trip parameters and click <strong>Optimize Journey</strong>. The VOLT Routing Engine will evaluate battery consumption curves, corridor charging stations, and AI wait times to find the optimal charging schedule.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: ML INTELLIGENCE -->
+    <section class="tab-pane" id="tab-ml">
+      <div class="dashboard-grid">
+        <div class="glass-card">
+          <div class="card-title">
+            <span>🧠 Predictive Charger Wait & Availability</span>
+            <span style="font-size: 12px; color: var(--volt-cyan);">FastAPI :8000</span>
+          </div>
+
+          <form id="ml-predict-form">
+            <div class="form-group">
+              <label class="form-label">Target Charging Station</label>
+              <select class="form-select" id="ml-station-id">
+                <option value="11111111-1111-1111-1111-111111111111">Station 1: VOLT HyperCharge Gateway (SF)</option>
+                <option value="22222222-2222-2222-2222-222222222222">Station 2: Electrify Station Express (Oakland)</option>
+                <option value="33333333-3333-3333-3333-333333333333">Station 3: Tesla Supercharger Hub (Palo Alto)</option>
+              </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="form-group">
+                <label class="form-label">Estimated Arrival Time</label>
+                <input type="datetime-local" class="form-control" id="ml-arrival-time">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Current Occupancy (0.0 - 1.0)</label>
+                <input type="number" step="0.1" min="0" max="1" value="0.5" class="form-control" id="ml-occupancy">
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="form-group">
+                <label class="form-label">Available Connectors</label>
+                <input type="number" value="2" min="0" max="12" class="form-control" id="ml-avail-conn">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Total Connectors</label>
+                <input type="number" value="4" min="1" max="12" class="form-control" id="ml-total-conn">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full">
+              ⚡ Run AI Inference
+            </button>
+          </form>
+        </div>
+
+        <!-- ML Inference Output -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>✨ Live Inference Prediction</span>
+            <span class="brand-badge">XGBoost GBDT</span>
+          </div>
+
+          <div id="ml-result-box" style="display: none;" class="prediction-box">
+            <!-- Row 1: Availability + Wait -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span class="stat-label">Availability Probability</span>
+                <div class="prediction-score" id="pred-prob">88%</div>
+              </div>
+              <div>
+                <span class="stat-label">Expected Wait</span>
+                <div class="prediction-score" style="color: var(--volt-cyan);" id="pred-wait">3.2 <span style="font-size: 16px;">min</span></div>
+              </div>
+            </div>
+
+            <!-- Row 2: Reliability + Confidence -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;">
+              <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); border-radius: 10px; padding: 12px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Station Reliability</div>
+                <div style="font-size: 22px; font-weight: 700; color: var(--volt-emerald);" id="pred-reliability">—</div>
+                <div style="margin-top: 6px; background: rgba(255,255,255,0.08); border-radius: 99px; height: 5px; overflow: hidden;">
+                  <div id="pred-reliability-bar" style="height: 100%; background: var(--volt-emerald); border-radius: 99px; transition: width 0.5s ease; width: 0%;"></div>
+                </div>
+              </div>
+              <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); border-radius: 10px; padding: 12px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Model Confidence</div>
+                <div style="font-size: 22px; font-weight: 700; color: var(--volt-amber);" id="pred-confidence">—</div>
+                <div style="margin-top: 6px; background: rgba(255,255,255,0.08); border-radius: 99px; height: 5px; overflow: hidden;">
+                  <div id="pred-confidence-bar" style="height: 100%; background: var(--volt-amber); border-radius: 99px; transition: width 0.5s ease; width: 0%;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 3: Model Version -->
+            <div style="margin-top: 14px; display: flex; justify-content: space-between; font-size: 13px;">
+              <span style="color: var(--text-secondary);">Model Version:</span>
+              <strong id="pred-version" style="color: var(--volt-cyan);">availability_v1</strong>
+            </div>
+
+            <!-- AI Explanation -->
+            <div class="prediction-explanation" id="pred-explainer">
+              AI Insight: High availability expected upon arrival. Minor queue risk.
+            </div>
+          </div>
+
+          <div id="ml-idle-message" style="color: var(--text-secondary); font-size: 14px; margin-top: 16px;">
+            Set your arrival parameters and click <strong>Run AI Inference</strong> to query the live machine learning model.
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Performance Metrics Panel -->
+      <div class="glass-card" style="margin-top: 0;">
+        <div class="card-title">
+          <span>📈 Model Performance Benchmarks</span>
+          <span style="font-size: 12px; color: var(--volt-emerald);">Evaluated on held-out test set</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+          <!-- Availability Model -->
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--volt-emerald); margin-bottom: 4px;">⚡ Availability Model (XGBoost Classifier)</div>
+
+            <div class="station-meta-row">
+              <span>Test Accuracy</span>
+              <strong style="color: #fff;">71.4%</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>F1 Score</span>
+              <strong style="color: var(--volt-emerald);">0.814</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>ROC-AUC</span>
+              <strong style="color: var(--volt-cyan);">0.695</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>Precision</span>
+              <strong style="color: #fff;">0.745</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>Recall</span>
+              <strong style="color: #fff;">0.897</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>Brier Score</span>
+              <strong style="color: var(--text-secondary);">0.192</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>vs. Baseline (majority class)</span>
+              <strong style="color: var(--volt-amber);">F1: 0.822 → 0.814 (XGBoost ROC: 0.695 vs 0.5)</strong>
+            </div>
+          </div>
+
+          <!-- Wait Time Model -->
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--volt-cyan); margin-bottom: 4px;">⏱️ Wait Time Model (XGBoost Regressor)</div>
+
+            <div class="station-meta-row">
+              <span>Test MAE</span>
+              <strong style="color: var(--volt-emerald);">4.61 min</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>Test RMSE</span>
+              <strong style="color: #fff;">6.49 min</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>vs. Baseline (mean guess)</span>
+              <strong style="color: var(--volt-amber);">MAE: 5.80 → 4.61 min</strong>
+            </div>
+            <div class="station-meta-row">
+              <span>Inference Speed</span>
+              <strong style="color: var(--volt-emerald);">0.0007 ms / prediction</strong>
+            </div>
+            <div style="margin-top: 8px; padding: 10px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+              📊 Both models trained on <strong style="color: #fff;">720 hourly observations/station</strong> using a 2-hour forward-looking target (predicting availability at <em>arrival time</em>, not current time).
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature importance summary -->
+        <div style="margin-top: 16px; padding: 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: 10px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Key Input Features Used by Both Models</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <span style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #a5b4fc; border-radius: 99px; padding: 3px 10px; font-size: 11px;">estimated_arrival_hour</span>
+            <span style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #a5b4fc; border-radius: 99px; padding: 3px 10px; font-size: 11px;">estimated_arrival_day</span>
+            <span style="background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; border-radius: 99px; padding: 3px 10px; font-size: 11px;">occupancy_rate</span>
+            <span style="background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; border-radius: 99px; padding: 3px 10px; font-size: 11px;">available_connectors</span>
+            <span style="background: rgba(6,182,212,0.12); border: 1px solid rgba(6,182,212,0.3); color: #67e8f9; border-radius: 99px; padding: 3px 10px; font-size: 11px;">historical_availability_rate</span>
+            <span style="background: rgba(6,182,212,0.12); border: 1px solid rgba(6,182,212,0.3); color: #67e8f9; border-radius: 99px; padding: 3px 10px; font-size: 11px;">historical_avg_wait</span>
+            <span style="background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); color: #fcd34d; border-radius: 99px; padding: 3px 10px; font-size: 11px;">station_reliability</span>
+            <span style="background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); color: #fcd34d; border-radius: 99px; padding: 3px 10px; font-size: 11px;">is_weekend</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: VEHICLES FLEET -->
+    <section class="tab-pane" id="tab-vehicles">
+      <div class="glass-card">
+        <div class="card-title">
+          <span>🚗 Seeded EV Fleet Profiles</span>
+          <span style="font-size: 12px; color: var(--volt-cyan);">Loaded from PostgreSQL</span>
+        </div>
+
+        <div class="station-grid" id="vehicles-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: SYSTEM HEALTH -->
+    <section class="tab-pane" id="tab-system">
+      <div class="glass-card">
+        <div class="card-title">
+          <span>🖥️ Live Microservices & Infrastructure Topology</span>
+          <span style="font-size: 12px; color: var(--volt-emerald);">All Systems Online</span>
+        </div>
+
+        <div class="station-grid">
+          <div class="station-card">
+            <div class="station-header">
+              <span class="station-name">Core API Gateway</span>
+              <span class="status-dot active"></span>
+            </div>
+            <p class="station-address">Hono Node.js Framework on Port 3000</p>
+            <div class="station-meta-row">
+              <span>Endpoint:</span>
+              <a href="http://localhost:3000/health" target="_blank" style="color: var(--volt-cyan);">http://localhost:3000/health</a>
+            </div>
+          </div>
+
+          <div class="station-card">
+            <div class="station-header">
+              <span class="station-name">Routing & Optimizer</span>
+              <span class="status-dot active"></span>
+            </div>
+            <p class="station-address">TypeScript Multi-Stop Engine on Port 3001</p>
+            <div class="station-meta-row">
+              <span>Endpoint:</span>
+              <a href="http://localhost:3001/health" target="_blank" style="color: var(--volt-cyan);">http://localhost:3001/health</a>
+            </div>
+          </div>
+
+          <div class="station-card">
+            <div class="station-header">
+              <span class="station-name">ML Prediction Service</span>
+              <span class="status-dot active"></span>
+            </div>
+            <p class="station-address">Python FastAPI & Scikit-Learn on Port 8000</p>
+            <div class="station-meta-row">
+              <span>Docs:</span>
+              <a href="http://localhost:8000/docs" target="_blank" style="color: var(--volt-cyan);">http://localhost:8000/docs</a>
+            </div>
+          </div>
+
+          <div class="station-card">
+            <div class="station-header">
+              <span class="station-name">PostGIS Database</span>
+              <span class="status-dot active"></span>
+            </div>
+            <p class="station-address">PostgreSQL 16 with PostGIS 3.4 Spatial Index</p>
+            <div class="station-meta-row">
+              <span>Database:</span>
+              <strong style="color: var(--volt-emerald);">volt_db (5432)</strong>
+            </div>
+          </div>
+
+          <div class="station-card">
+            <div class="station-header">
+              <span class="station-name">Redis In-Memory Cache</span>
+              <span class="status-dot active"></span>
+            </div>
+            <p class="station-address">Redis 7 Alpine Cache & Rate Limiter</p>
+            <div class="station-meta-row">
+              <span>Instance:</span>
+              <strong style="color: var(--volt-emerald);">volt-redis (6379)</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Application Script -->
+<script src="app.js"></script>
+
+</body>
+</html>
