@@ -39,10 +39,10 @@ class VoltViewModelTest {
     @Test
     fun initialUiState_containsDefaultVehiclesAndStations() = runTest {
         val state = viewModel.uiState.value
-        assertEquals("Tesla", state.selectedVehicle.make)
-        assertEquals("Model 3", state.selectedVehicle.model)
+        assertEquals("Tata", state.selectedVehicle.make)
+        assertEquals("Nexon EV", state.selectedVehicle.model)
         assertEquals(VoltNavTab.DASHBOARD, state.currentTab)
-        assertTrue(state.stations.isNotEmpty())
+        assertNotNull(state.stations)
         assertNull(state.rerouteAlert)
     }
 

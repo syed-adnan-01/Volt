@@ -66,6 +66,7 @@ import com.volt.android.ui.components.MetricCard
 import com.volt.android.ui.components.RouteMarker
 import com.volt.android.ui.components.VoltMapView
 import com.volt.android.ui.theme.VoltAmber
+import com.volt.android.ui.theme.VoltBlueBorder
 import com.volt.android.ui.theme.VoltBlueLight
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
@@ -772,15 +773,15 @@ fun DashboardScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF0C1E2B))
-                                            .border(1.dp, VoltCyan.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                            .background(VoltBlueLight)
+                                            .border(1.dp, VoltBlueBorder, RoundedCornerShape(8.dp))
                                             .padding(horizontal = 8.dp, vertical = 5.dp),
                                         verticalAlignment = Alignment.Top
                                     ) {
-                                        Text("✦ ", color = VoltCyan, fontSize = 9.sp)
+                                        Text("✦ ", color = VoltCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                         Text(
                                             text = lyzr,
-                                            color = VoltCyan.copy(alpha = 0.8f),
+                                            color = VoltTextPrimary,
                                             fontSize = 10.sp,
                                             lineHeight = 13.sp
                                         )

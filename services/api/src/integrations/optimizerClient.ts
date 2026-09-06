@@ -326,7 +326,7 @@ export async function optimizeTrip(
   }
 
   const fallbackReason = 'Selected lowest predicted wait corridor station via intelligent fallback strategy';
-  const fallbackGeometry = {
+  let fallbackGeometry: any = {
     type: 'LineString',
     coordinates: [
       [origin.lng, origin.lat],
@@ -334,6 +334,17 @@ export async function optimizeTrip(
       [destination.lng, destination.lat]
     ]
   };
+
+  try {
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${selectedCharger.longitude},${selectedCharger.latitude};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
+    const osrmRes = await fetch(osrmUrl, { headers: { 'User-Agent': 'VoltEV-Server/1.0' } });
+    if (osrmRes.ok) {
+      const osrmData = await osrmRes.json() as any;
+      if (osrmData.code === 'Ok' && osrmData.routes?.[0]?.geometry) {
+        fallbackGeometry = osrmData.routes[0].geometry;
+      }
+    }
+  } catch (_e) { }
 
   return {
     status: 'OPTIMAL',

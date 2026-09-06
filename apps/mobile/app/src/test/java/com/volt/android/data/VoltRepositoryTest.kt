@@ -115,10 +115,10 @@ class VoltRepositoryTest {
     @Test
     fun resetTelemetryBaseline_restoresInitialVehicleStats() {
         repository.simulateDrive(distanceKm = 150.0, speedKmH = 120.0, tempCelsius = 5.0)
-        assertTrue(repository.telemetry.value.socPercent < 78.0)
+        assertTrue(repository.telemetry.value.socPercent < 80.0)
 
         repository.resetTelemetryBaseline()
-        assertEquals(78.0, repository.telemetry.value.socPercent, 0.1)
+        assertEquals(80.0, repository.telemetry.value.socPercent, 0.1)
         assertFalse(repository.telemetry.value.isCharging)
     }
 }

@@ -45,6 +45,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +59,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.model.LatLng
+import com.volt.android.BuildConfig
+import com.volt.android.data.GoogleDirectionsClient
 import com.volt.android.data.LocationSearchService
 import com.volt.android.data.PolylineDecoder
 import com.volt.android.data.models.RouteStrategy
@@ -68,6 +71,7 @@ import com.volt.android.ui.components.RerouteBanner
 import com.volt.android.ui.components.RouteMarker
 import com.volt.android.ui.components.VoltMapView
 import com.volt.android.ui.theme.VoltAmber
+import com.volt.android.ui.theme.VoltBlueBorder
 import com.volt.android.ui.theme.VoltBlueLight
 import com.volt.android.ui.theme.VoltCardBg
 import com.volt.android.ui.theme.VoltCardBorder
@@ -154,11 +158,41 @@ fun TripPlannerScreen(
             .map { LatLng(it.latitude!!, it.longitude!!) }
     }
 
-    // Decode backend geometry and ensure the path connects through ALL charging stops
-    val routePoints = remember(geometry, uiState.tripPlan.stops, effectiveOriginLat, effectiveOriginLng, effectiveDestLat, effectiveDestLng) {
-        val decoded = PolylineDecoder.decode(geometry)
+    // Decode backend geometry and dynamically fetch real highway road curves if geometry is missing or coarse (straight line)
+    val baseDecoded = remember(geometry) { PolylineDecoder.decode(geometry) }
+    var liveRoadPoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
+
+    // When geometry is missing or has fewer than 20 points (e.g. straight line fallback), fetch real highway road network from OSRM
+    LaunchedEffect(effectiveOriginLat, effectiveOriginLng, effectiveDestLat, effectiveDestLng, chargerStopCoords, geometry) {
+        if (effectiveOriginLat != 0.0 && effectiveDestLat != 0.0) {
+            val isCoarse = baseDecoded.size < 20
+            if (isCoarse) {
+                try {
+                    val result = GoogleDirectionsClient.fetchRoute(
+                        originLat = effectiveOriginLat,
+                        originLng = effectiveOriginLng,
+                        destLat = effectiveDestLat,
+                        destLng = effectiveDestLng,
+                        apiKey = BuildConfig.MAPS_API_KEY,
+                        waypoints = chargerStopCoords
+                    )
+                    if (result != null && result.encodedPolyline.isNotBlank()) {
+                        val decodedRoad = PolylineDecoder.decode(result.encodedPolyline)
+                        if (decodedRoad.size >= 10) {
+                            liveRoadPoints = decodedRoad
+                        }
+                    }
+                } catch (_: Exception) { }
+            } else {
+                liveRoadPoints = emptyList()
+            }
+        }
+    }
+
+    val routePoints = remember(baseDecoded, liveRoadPoints, chargerStopCoords, effectiveOriginLat, effectiveOriginLng, effectiveDestLat, effectiveDestLng) {
+        val workingRoute = if (liveRoadPoints.size >= 10) liveRoadPoints else baseDecoded
         PolylineDecoder.ensurePathVisitsAllStops(
-            baseRoute = decoded,
+            baseRoute = workingRoute,
             origin = originCoord,
             chargingStops = chargerStopCoords,
             destination = destCoord
@@ -481,8 +515,8 @@ fun TripPlannerScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF0C1E2B))
-                            .border(1.dp, VoltCyan.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                            .background(VoltBlueLight)
+                            .border(1.dp, VoltBlueBorder, RoundedCornerShape(8.dp))
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -805,8 +839,8 @@ fun TripPlannerScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF0C1E2B))
-                            .border(1.dp, VoltCyan.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                            .background(VoltBlueLight)
+                            .border(1.dp, VoltBlueBorder, RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1089,21 +1123,7 @@ fun TripPlannerScreen(
                     isStartingLocation = false
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedTextField(
-                    value = distanceInput,
-                    onValueChange = { distanceInput = it },
-                    label = { Text("Estimated Distance (km)", color = VoltTextSecondary) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = VoltTextPrimary,
-                        unfocusedTextColor = VoltTextPrimary,
-                        focusedBorderColor = VoltCyan,
-                        unfocusedBorderColor = VoltCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -1426,15 +1446,15 @@ fun TripPlannerScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFF0C1E2B))
-                                            .border(1.dp, VoltCyan.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                            .background(VoltBlueLight)
+                                            .border(1.dp, VoltBlueBorder, RoundedCornerShape(10.dp))
                                             .padding(horizontal = 8.dp, vertical = 5.dp),
                                         verticalAlignment = Alignment.Top
                                     ) {
-                                        Text("✦ ", color = VoltCyan, fontSize = 10.sp)
+                                        Text("✦ ", color = VoltCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         Text(
                                             text = stopLyzr,
-                                            color = VoltCyan.copy(alpha = 0.9f),
+                                            color = VoltTextPrimary,
                                             fontSize = 10.sp,
                                             lineHeight = 14.sp
                                         )
@@ -1459,12 +1479,12 @@ fun TripPlannerScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF0C1E2B))
-                            .border(1.dp, VoltCyan.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                            .background(VoltBlueLight)
+                            .border(1.dp, VoltBlueBorder, RoundedCornerShape(10.dp))
                             .padding(10.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Text("✦ ", color = VoltCyan, fontSize = 12.sp)
+                        Text("✦ ", color = VoltCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Column {
                             Text(
                                 text = "Lyzr AI Route Assessment",

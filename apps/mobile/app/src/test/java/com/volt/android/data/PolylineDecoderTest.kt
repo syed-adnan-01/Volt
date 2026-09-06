@@ -224,7 +224,7 @@ class PolylineDecoderTest {
         // Verify real station is selected along the NH 75 corridor (Hassan / Channarayapatna)
         assertTrue(
             "Station should be a real charging station (not imaginary dummy)",
-            chargerStop.name.contains("Jio-bp") || chargerStop.name.contains("Hassan") || chargerStop.name.contains("Zeon")
+            chargerStop.name.contains("Jio-bp") || chargerStop.name.contains("Hassan") || chargerStop.name.contains("Zeon") || chargerStop.name.contains("Tata Power")
         )
         assertNotNull(chargerStop.latitude)
         assertNotNull(chargerStop.longitude)

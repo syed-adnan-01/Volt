@@ -1081,8 +1081,8 @@ fun StationDiscoveryCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0C1E2B))
-                            .border(1.dp, VoltCyan.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                            .background(VoltBlueLight)
+                            .border(1.dp, VoltBlueBorder, RoundedCornerShape(12.dp))
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.Top
                     ) {
@@ -1090,11 +1090,12 @@ fun StationDiscoveryCard(
                             text = "✦",
                             color = VoltCyan,
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 1.dp, end = 6.dp)
                         )
                         Text(
                             text = lyzrText,
-                            color = VoltCyan.copy(alpha = 0.85f),
+                            color = VoltTextPrimary,
                             fontSize = 11.sp,
                             lineHeight = 16.sp
                         )

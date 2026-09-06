@@ -258,6 +258,24 @@ class VoltRepository {
                         )
                     }
 
+                    val backendGeom = dto.geometry
+                    val chargerStopCoords = stops
+                        .filter { it.type == StopType.CHARGER_STOP && it.latitude != null && it.longitude != null }
+                        .map { LatLng(it.latitude!!, it.longitude!!) }
+
+                    // If backend geometry is coarse / straight line (fewer than 15 points), fetch true multi-stop OSRM road geometry
+                    val resolvedGeometry = if ((backendGeom == null || PolylineDecoder.decode(backendGeom).size < 15) && originLat != 0.0 && destLat != 0.0) {
+                        try {
+                            GoogleDirectionsClient.fetchRoute(
+                                originLat, originLng, destLat, destLng,
+                                BuildConfig.MAPS_API_KEY,
+                                chargerStopCoords
+                            )?.encodedPolyline ?: backendGeom
+                        } catch (_: Exception) { backendGeom }
+                    } else {
+                        backendGeom
+                    }
+
                     val livePlan = TripPlanResult(
                         tripId = dto.tripId,
                         origin = origin,
@@ -270,7 +288,7 @@ class VoltRepository {
                         isFeasible = dto.battery?.reachable ?: true,
                         safetyMarginPercent = dto.battery?.safetyMarginPercent ?: 10.0,
                         riskScore = dto.battery?.riskScore ?: 0.1,
-                        geometry = dto.geometry,
+                        geometry = resolvedGeometry,
                         battery = batteryResult,
                         stops = stops,
                         optimizerData = optimizerData,
@@ -374,17 +392,27 @@ class VoltRepository {
                     }
                 } else {
                     // Fallback when backend is not responding or on physical device.
-                    // Fetch OSRM route for the direct O->D corridor only (no synthetic midpoint waypoints
-                    // which can be off-road and cause all OSRM candidates to fail).
+                    // First compute the EV plan to determine optimal charging stops
+                    val initialPlan = calculateTrip(
+                        origin, destination, distanceKm, currentVehicle,
+                        batteryPercent, originLat, originLng, destLat, destLng,
+                        null, null
+                    )
+
+                    val chargerStopCoords = initialPlan.stops
+                        .filter { it.type == StopType.CHARGER_STOP && it.latitude != null && it.longitude != null }
+                        .map { LatLng(it.latitude!!, it.longitude!!) }
+
+                    // Fetch true OSRM driving road network passing through all charging stops
                     val directionsResult = try {
                         GoogleDirectionsClient.fetchRoute(
                             originLat, originLng, destLat, destLng,
                             BuildConfig.MAPS_API_KEY,
-                            emptyList() // Direct corridor only — charger stops spliced by PolylineDecoder in UI
+                            chargerStopCoords
                         )
                     } catch (_: Exception) { null }
 
-                    android.util.Log.d("VoltRepository", "OSRM direct route: ${if (directionsResult != null) "OK ${directionsResult.encodedPolyline.length} chars" else "FAILED"}")
+                    android.util.Log.d("VoltRepository", "OSRM multi-stop route: ${if (directionsResult != null) "OK ${directionsResult.encodedPolyline.length} chars" else "FAILED"}")
 
                     val actualDistKm = if (directionsResult != null && directionsResult.distanceMeters > 0) {
                         directionsResult.distanceMeters / 1000.0
@@ -418,12 +446,21 @@ class VoltRepository {
                 }
             } catch (e: Exception) {
                 _networkError.value = e.message
-                // Direct corridor route — no synthetic waypoints
+                val initialPlan = calculateTrip(
+                    origin, destination, distanceKm, _selectedVehicle.value,
+                    batteryPercent, originLat, originLng, destLat, destLng,
+                    null, null
+                )
+
+                val chargerStopCoords = initialPlan.stops
+                    .filter { it.type == StopType.CHARGER_STOP && it.latitude != null && it.longitude != null }
+                    .map { LatLng(it.latitude!!, it.longitude!!) }
+
                 val directionsResult = try {
                     GoogleDirectionsClient.fetchRoute(
                         originLat, originLng, destLat, destLng,
                         BuildConfig.MAPS_API_KEY,
-                        emptyList()
+                        chargerStopCoords
                     )
                 } catch (_: Exception) { null }
 
@@ -949,6 +986,8 @@ class VoltRepository {
                 it.latitude != null && it.longitude != null && !it.id.startsWith("st-")
             }.ifEmpty {
                 _stations.value.filter { it.latitude != null && it.longitude != null }
+            }.ifEmpty {
+                sampleStations.filter { it.latitude != null && it.longitude != null }
             }
 
             val matchedStation = if (idealLat != null && idealLng != null && realCandidateStations.isNotEmpty()) {

@@ -24,7 +24,7 @@ export async function getRoutes(
   const url = `${env.OSRM_BASE_URL}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&alternatives=true`;
   
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+  const timeout = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
   try {
     const response = await fetch(url, { signal: controller.signal });
